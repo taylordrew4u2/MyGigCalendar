@@ -8,6 +8,25 @@
 import SwiftUI
 import PhotosUI
 
+// MARK: - Color Hex Init
+
+private extension Color {
+    init?(hex: String) {
+        var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if h.hasPrefix("#") { h.removeFirst() }
+
+        guard h.count == 6, let rgb = UInt64(h, radix: 16) else {
+            return nil
+        }
+
+        self.init(
+            red: Double((rgb >> 16) & 0xFF) / 255,
+            green: Double((rgb >> 8) & 0xFF) / 255,
+            blue: Double(rgb & 0xFF) / 255
+        )
+    }
+}
+
 // MARK: - Editor Tab
 
 private enum EditorTab: String, CaseIterable {
