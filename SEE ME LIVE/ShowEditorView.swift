@@ -610,9 +610,7 @@ struct ShowEditorView: View {
         Task.detached {
             let bgContext = PersistenceController.shared.container.newBackgroundContext()
             bgContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
-            if let bgShow = try? bgContext.existingObject(with: objectID) as? Show {
-                await PublicCloudSyncService.shared.saveOrUpdate(show: bgShow, in: bgContext)
-            }
+            await PublicCloudSyncService.shared.saveOrUpdate(objectID: objectID, in: bgContext)
         }
     }
 }
@@ -667,4 +665,3 @@ private struct CameraPickerView: UIViewControllerRepresentable {
         .environment(\.managedObjectContext,
                       PersistenceController.preview.container.viewContext)
 }
-

@@ -44,10 +44,8 @@ final class PublicCloudSyncService: Sendable {
 
     // MARK: - Save / Update
 
-    /// Saves or updates a PublicShow record for the given Core Data Show.
-    func saveOrUpdate(show: Show, in context: NSManagedObjectContext) async {
-        let objectID = show.objectID
-
+    /// Saves or updates a PublicShow record for the given Core Data Show object ID.
+    func saveOrUpdate(objectID: NSManagedObjectID, in context: NSManagedObjectContext) async {
         // Snapshot all Show properties inside context.perform to avoid
         // unsafeForcedSync from an async context.
         struct ShowSnapshot {
@@ -165,13 +163,7 @@ final class PublicCloudSyncService: Sendable {
             return results.map { $0.objectID }
         }
         for objectID in pendingIDs {
-            // Re-fetch each show inside saveOrUpdate via context.perform
-            let show: Show? = await context.perform {
-                try? context.existingObject(with: objectID) as? Show
-            }
-            if let show {
-                await saveOrUpdate(show: show, in: context)
-            }
+            await saveOrUpdate(objectID: objectID, in: context)
         }
 
         // 2. Retry pending deletes stored in UserDefaults.
