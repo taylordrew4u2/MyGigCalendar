@@ -240,6 +240,10 @@ struct ShowEditorView: View {
         }
         .background(Color("CardBackground"))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
+        )
     }
 
     // Extracted date/time picker
@@ -294,6 +298,10 @@ struct ShowEditorView: View {
         }
         .background(Color("CardBackground"))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
+        )
     }
 
     // Extracted toggles
@@ -320,6 +328,10 @@ struct ShowEditorView: View {
         }
         .background(Color("CardBackground"))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
+        )
         .animation(.easeInOut(duration: 0.15), value: addToCalendar)
     }
 
@@ -344,12 +356,10 @@ struct ShowEditorView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(isDisabled ? Color(.systemGray4) : Color.accentColor)
-                        .shadow(color: isDisabled ? .clear : Color.accentColor.opacity(0.35),
-                                radius: 12, y: 5)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(isDisabled ? Color.secondary.opacity(0.25) : Color.primary)
                 )
-                .foregroundStyle(.white)
+                .foregroundStyle(Color("AppBackground"))
             }
             .disabled(isDisabled)
 
@@ -406,73 +416,60 @@ struct ShowEditorView: View {
                 showImageSourcePicker = true
             } label: {
                 if let data = flyerData, let uiImage = UIImage(data: data) {
-                    // Flyer preview
                     ZStack(alignment: .topTrailing) {
                         Image(uiImage: uiImage)
                             .resizable()
                             .scaledToFill()
                             .frame(maxWidth: .infinity)
                             .frame(height: 220)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .shadow(color: .black.opacity(0.18), radius: 12, x: 0, y: 5)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                        // Edit badge
                         HStack(spacing: 5) {
                             Image(systemName: "pencil")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.system(size: 10, weight: .bold))
                             Text("Change")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 11, weight: .semibold))
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 5)
                         .background(.ultraThinMaterial, in: Capsule())
-                        .padding(12)
+                        .padding(10)
                     }
                 } else {
-                    // Empty state — looks like a poster slot
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color("CardBackground"))
+                    HStack(spacing: 12) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 36, height: 36)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(
-                                        Color.accentColor.opacity(0.35),
-                                        style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-                                    )
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(Color.secondary.opacity(0.18), lineWidth: 1)
                             )
 
-                        VStack(spacing: 14) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.accentColor.opacity(0.1))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .font(.system(size: 26, weight: .light))
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                            VStack(spacing: 4) {
-                                Text("Add Show Flyer")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.primary)
-                                Text("Upload from your library or take a photo")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.secondary)
-                                    .multilineTextAlignment(.center)
-                            }
-                            HStack(spacing: 18) {
-                                Label("Camera", systemImage: "camera")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(Color.accentColor)
-                                Label("Library", systemImage: "photo")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(Color.accentColor)
-                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Add show flyer")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            Text("Photo library or camera")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
                         }
-                        .padding(.vertical, 32)
+
+                        Spacer()
+
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: 200)
+                    .padding(14)
+                    .background(Color("CardBackground"))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
+                    )
                 }
             }
             .buttonStyle(HeroPress())

@@ -65,13 +65,12 @@ struct ShowDetailView: View {
                                     .font(.system(size: 12, weight: .bold))
                                     .opacity(0.7)
                             }
-                            .foregroundStyle(.white)
-                            .padding(.vertical, 16)
-                            .padding(.horizontal, 20)
+                            .foregroundStyle(Color("AppBackground"))
+                            .padding(.vertical, 14)
+                            .padding(.horizontal, 18)
                             .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color.accentColor)
-                                    .shadow(color: Color.accentColor.opacity(0.35), radius: 12, y: 5)
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.primary)
                             )
                         }
                         .buttonStyle(DetailCardPress())
@@ -94,9 +93,11 @@ struct ShowDetailView: View {
                         }
                         .padding(18)
                         .background(Color("CardBackground"))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.05),
-                                radius: 10, x: 0, y: 3)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
+                        )
                     }
 
                     // MARK: Action Buttons
@@ -107,25 +108,27 @@ struct ShowDetailView: View {
                                 onEdit()
                             } label: {
                                 Label("Edit", systemImage: "pencil")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.system(size: 14, weight: .semibold))
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
+                                    .padding(.vertical, 12)
                                     .foregroundStyle(.primary)
-                                    .background(Color("CardBackground"))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.06),
-                                            radius: 8, x: 0, y: 3)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 1)
+                                    )
                             }
                             .buttonStyle(DetailCardPress())
 
                             ShareLink(item: shareText) {
                                 Label("Share", systemImage: "square.and.arrow.up")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.system(size: 14, weight: .semibold))
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .foregroundStyle(Color.accentColor)
-                                    .background(Color.accentColor.opacity(0.08))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .padding(.vertical, 12)
+                                    .foregroundStyle(.primary)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 1)
+                                    )
                             }
                             .buttonStyle(DetailCardPress())
                         }
@@ -395,9 +398,11 @@ private struct InfoCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color("CardBackground"))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.05),
-                radius: 10, x: 0, y: 3)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
+        )
     }
 }
 

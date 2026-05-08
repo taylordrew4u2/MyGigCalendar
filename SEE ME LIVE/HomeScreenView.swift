@@ -4,6 +4,9 @@
 //
 //  Created by Taylor Drew on 3/3/26.
 //
+//  Calendar-first dashboard. The performer's month and next dates are the
+//  primary surface; flyer generation and settings are secondary actions.
+//
 
 import SwiftUI
 import CoreData
@@ -37,21 +40,11 @@ struct HomeScreenView: View {
     @State private var showToast = false
     @State private var isPresentingDateSizeSheet = false
     @State private var isPresentingShareSheet = false
-    @State private var headerAppeared = false
     @State private var calendarMonth: Date = Date()
     @State private var selectedCalendarDate: Date?
-    @State private var isRefreshing = false
-    @State private var isLoading = true
     @State private var searchText = ""
-    @State private var emptyStateAnimated = false
+    @State private var showPastShows = false
     @AppStorage("showDateTextSize") private var showDateTextSize: Double = 12
-
-    // Adaptive animation states (splash-screen style)
-    @State private var contentAppeared = false
-    @State private var pulseGlow = false
-    
-    private var brand: Color { Color(red: 0.92, green: 0.14, blue: 0.16) }
-    private let userID = UserIdentityService.shared.userID
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Filtered Shows (Search)
@@ -68,225 +61,83 @@ struct HomeScreenView: View {
     }
 
     private func matchesSearch(_ show: Show) -> Bool {
-        let query = searchText.lowercased()
-        return show.titleOrEmpty.lowercased().contains(query) ||
-               show.venueOrEmpty.lowercased().contains(query) ||
-               show.roleOrEmpty.lowercased().contains(query) ||
-               show.notesOrEmpty.lowercased().contains(query)
+        let q = searchText.lowercased()
+        return show.titleOrEmpty.lowercased().contains(q) ||
+               show.venueOrEmpty.lowercased().contains(q) ||
+               show.roleOrEmpty.lowercased().contains(q) ||
+               show.notesOrEmpty.lowercased().contains(q)
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Skeleton Loading View
+    // MARK: - Body
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private var skeletonLoadingView: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Skeleton Hero Header
-                VStack(alignment: .leading, spacing: 6) {
-                    SkeletonView(width: 120, height: 14)
-                    SkeletonView(width: 200, height: 34)
-                    SkeletonView(width: 100, height: 15)
-                        .padding(.top, 2)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 32)
-
-                // Skeleton Spotlight Card
-                VStack(spacing: 0) {
-                    SkeletonView(height: 4)
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            SkeletonView(width: 80, height: 20)
-                            Spacer()
-                            SkeletonView(width: 60, height: 24)
-                        }
-                        HStack(alignment: .top, spacing: 16) {
-                            SkeletonView(width: 52, height: 50)
-                            VStack(alignment: .leading, spacing: 6) {
-                                SkeletonView(width: 180, height: 20)
-                                SkeletonView(width: 120, height: 13)
-                                SkeletonView(width: 80, height: 13)
-                            }
-                            Spacer()
-                        }
-                    }
-                    .padding(20)
-                }
-                .background(Color("CardBackground"))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(.horizontal, 20)
-                .padding(.bottom, 28)
-
-                // Skeleton Quick Actions
-                HStack(spacing: 12) {
-                    SkeletonView(height: 90)
-                    SkeletonView(height: 90)
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 32)
-
-                // Skeleton Calendar
-                VStack(alignment: .leading, spacing: 14) {
-                    SkeletonView(width: 80, height: 12)
-                        .padding(.leading, 4)
-                    SkeletonView(height: 280)
-                }
-                .padding(.horizontal, 20)
-            }
-        }
-        .scrollIndicators(.hidden)
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Search Empty State
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private var searchEmptyState: some View {
-        VStack(spacing: 20) {
-            Spacer(minLength: 40)
-
-            ZStack {
-                Circle()
-                    .fill(Color.secondary.opacity(0.08))
-                    .frame(width: 90, height: 90)
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 32, weight: .light))
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(spacing: 8) {
-                Text("No Results")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.primary)
-
-                Text("No shows match \"\(searchText)\"")
-                    .font(.system(size: 15))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            Spacer(minLength: 40)
-        }
-    }
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                // Adaptive gradient background (splash-screen style)
-                adaptiveBackground
-                
-                if isLoading {
-                    skeletonLoadingView
-                } else {
-                    ScrollView {
-                        VStack(spacing: 0) {
+                Color("AppBackground").ignoresSafeArea()
 
-                            // ── Search Bar ──
-                            if !allShows.isEmpty {
-                                searchBar
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 8)
-                                    .padding(.bottom, 12)
-                                    .opacity(contentAppeared ? 1 : 0)
-                                    .offset(y: contentAppeared ? 0 : -10)
-                                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: contentAppeared)
-                            }
+                ScrollView {
+                    VStack(spacing: 24) {
+                        monthHeader
+                            .padding(.horizontal, 20)
+                            .padding(.top, 4)
 
-                            // ── Hero Header ──
-                            heroHeader
+                        calendarCard
+                            .padding(.horizontal, 20)
+
+                        if !allShows.isEmpty {
+                            searchField
                                 .padding(.horizontal, 20)
-                                .padding(.top, 8)
-                                .padding(.bottom, 32)
-
-                            // ── Next Show Spotlight ──
-                            if let next = filteredUpcomingShows.first {
-                                spotlightCard(show: next)
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 28)
-                                    .opacity(contentAppeared ? 1 : 0)
-                                    .offset(y: contentAppeared ? 0 : 20)
-                                    .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: contentAppeared)
-                            }
-
-                            // ── Quick Actions ──
-                            quickActions
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 32)
-                                .opacity(contentAppeared ? 1 : 0)
-                                .offset(y: contentAppeared ? 0 : 20)
-                                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: contentAppeared)
-
-                            // ── Calendar ──
-                            calendarSection
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 32)
-                                .opacity(contentAppeared ? 1 : 0)
-                                .offset(y: contentAppeared ? 0 : 20)
-                                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.25), value: contentAppeared)
-
-                            // ── Upcoming Shows ──
-                            if filteredUpcomingShows.count > 0 {
-                                upcomingSection
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 32)
-                                    .opacity(contentAppeared ? 1 : 0)
-                                    .offset(y: contentAppeared ? 0 : 20)
-                                    .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: contentAppeared)
-                            }
-
-                            // ── Past Shows ──
-                            if !filteredPastShows.isEmpty {
-                                pastShowsSection
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 32)
-                                    .opacity(contentAppeared ? 1 : 0)
-                                    .offset(y: contentAppeared ? 0 : 20)
-                                    .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.35), value: contentAppeared)
-                            }
-
-                            // ── Empty State ──
-                            if allShows.isEmpty {
-                                emptyState
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 32)
-                            }
-
-                            // ── Search Empty State ──
-                            if !searchText.isEmpty && filteredUpcomingShows.isEmpty && filteredPastShows.isEmpty {
-                                searchEmptyState
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 32)
-                            }
-
-                            Spacer(minLength: 100)
                         }
+
+                        if let selected = selectedCalendarDate {
+                            selectedDaySection(date: selected)
+                                .padding(.horizontal, 20)
+                        } else if !filteredUpcomingShows.isEmpty {
+                            upcomingSection
+                                .padding(.horizontal, 20)
+                        }
+
+                        if !filteredPastShows.isEmpty {
+                            pastSection
+                                .padding(.horizontal, 20)
+                        }
+
+                        if allShows.isEmpty {
+                            emptyState
+                                .padding(.horizontal, 20)
+                                .padding(.top, 12)
+                        }
+
+                        if !searchText.isEmpty &&
+                            filteredUpcomingShows.isEmpty &&
+                            filteredPastShows.isEmpty {
+                            searchEmptyState
+                                .padding(.horizontal, 20)
+                        }
+
+                        Color.clear.frame(height: 40)
                     }
-                    .scrollIndicators(.hidden)
+                    .padding(.bottom, 24)
                 }
+                .scrollIndicators(.hidden)
 
-                // ── Floating Action Button ──
-                addButton
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.trailing, 24)
-                    .padding(.bottom, 34)
-
-                // ── Toast ──
                 if showToast, let msg = toastMessage {
                     toast(msg)
-                        .padding(.bottom, 110)
+                        .padding(.bottom, 28)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(100)
                 }
             }
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar { topToolbar }
             .sheet(isPresented: $isPresentingEditor, onDismiss: {
                 if showToEdit != nil {
-                    showToastBriefly("Show updated ✓")
+                    showToastBriefly("Show updated")
                 } else if !allShows.isEmpty {
-                    showToastBriefly("Show saved 🎉")
+                    showToastBriefly("Show saved")
                 }
                 showToEdit = nil
             }) {
@@ -299,458 +150,478 @@ struct HomeScreenView: View {
                     performerName: CalendarDisplayOptions.load().performerName
                 )
             }
-            .task {
-                await performBackgroundSync()
-                withAnimation(.easeOut(duration: 0.3)) {
-                    isLoading = false
-                }
-            }
-            .refreshable {
-                await withCheckedContinuation { continuation in
-                    isRefreshing = true
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    
-                    Task {
-                        await performBackgroundSync()
-                        
-                        try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s minimum feedback
-                        
-                        await MainActor.run {
-                            isRefreshing = false
-                            UINotificationFeedbackGenerator().notificationOccurred(.success)
-                            continuation.resume()
-                        }
-                    }
-                }
-            }
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.6).delay(0.1)) {
-                    headerAppeared = true
-                }
-                // Trigger cascading content animations
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        contentAppeared = true
-                        pulseGlow = true
-                    }
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button {
-                            isPresentingDateSizeSheet = true
-                        } label: {
-                            Label("Date Text Size", systemImage: "textformat.size")
-                        }
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 15, weight: .medium))
-                    }
-                    .accessibilityLabel("Settings")
-                }
-            }
             .sheet(isPresented: $isPresentingDateSizeSheet) {
                 DateTextSizeSheet(showDateTextSize: $showDateTextSize)
             }
-        }
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Adaptive Background
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    
-    private var adaptiveBackground: some View {
-        ZStack {
-            // Base background
-            Color("AppBackground").ignoresSafeArea()
-            
-            // Subtle gradient overlay (splash-screen style)
-            LinearGradient(
-                colors: [
-                    brand.opacity(colorScheme == .dark ? 0.08 : 0.04),
-                    Color("AppBackground").opacity(0.0)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
-            // Animated glow orbs — drawingGroup + accessibilityHidden to prevent
-            // excessive accessibility/layout notifications (rate-limit spam).
-            Group {
-                Circle()
-                    .fill(brand.opacity(colorScheme == .dark ? 0.06 : 0.03))
-                    .blur(radius: 80)
-                    .frame(width: 300, height: 300)
-                    .offset(x: -100, y: -200)
-                    .scaleEffect(pulseGlow ? 1.1 : 0.9)
-                    .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: pulseGlow)
-                
-                Circle()
-                    .fill(Color.accentColor.opacity(colorScheme == .dark ? 0.05 : 0.025))
-                    .blur(radius: 100)
-                    .frame(width: 400, height: 400)
-                    .offset(x: 120, y: 150)
-                    .scaleEffect(pulseGlow ? 0.95 : 1.05)
-                    .animation(.easeInOut(duration: 5).repeatForever(autoreverses: true).delay(0.5), value: pulseGlow)
+            .task { await performBackgroundSync() }
+            .refreshable {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                await performBackgroundSync()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
-            .drawingGroup()
-            .accessibilityHidden(true)
-            .allowsHitTesting(false)
         }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Search Bar
+    // MARK: - Toolbar
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private var searchBar: some View {
+    @ToolbarContentBuilder
+    private var topToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Text("SEE ME LIVE")
+                .font(.system(size: 12, weight: .heavy))
+                .tracking(2)
+                .foregroundStyle(.primary)
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Menu {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    isPresentingShareSheet = true
+                } label: {
+                    Label("Create flyer", systemImage: "doc.richtext")
+                }
+                .disabled(allShows.isEmpty)
+
+                Button {
+                    isPresentingDateSizeSheet = true
+                } label: {
+                    Label("Date text size", systemImage: "textformat.size")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.primary)
+            }
+            .accessibilityLabel("More")
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Month Header (calendar-first eyebrow)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private var monthHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Calendar")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.5)
+                    .foregroundStyle(.secondary)
+                Text(monthYearString(from: calendarMonth))
+                    .font(.system(size: 30, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer(minLength: 12)
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                showToEdit = nil
+                isPresentingEditor = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Add show")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(Color("AppBackground"))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(
+                    Capsule().fill(Color.primary)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add new show")
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Calendar Card
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private var calendarCard: some View {
+        VStack(spacing: 0) {
+            // Month nav strip
+            HStack(spacing: 0) {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        calendarMonth = Calendar.current.date(byAdding: .month, value: -1, to: calendarMonth) ?? calendarMonth
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, height: 36)
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        calendarMonth = Date()
+                        selectedCalendarDate = nil
+                    }
+                } label: {
+                    Text("Today")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .overlay(
+                            Capsule().strokeBorder(Color.secondary.opacity(0.25), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        calendarMonth = Calendar.current.date(byAdding: .month, value: 1, to: calendarMonth) ?? calendarMonth
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, height: 36)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 4)
+
+            // Weekday headers
+            let weekdays = ["S", "M", "T", "W", "T", "F", "S"]
+            HStack(spacing: 0) {
+                ForEach(Array(weekdays.enumerated()), id: \.offset) { _, day in
+                    Text(day)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.top, 4)
+            .padding(.bottom, 6)
+
+            // Day grid
+            let days = calendarDays(for: calendarMonth)
+            let showDates = showDateSet()
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 2) {
+                ForEach(Array(days.enumerated()), id: \.offset) { _, day in
+                    CalendarDayCell(
+                        day: day,
+                        hasShow: day != nil && showDates.contains(calendarDayKey(day!)),
+                        isSelected: day != nil && selectedCalendarDate.map { Calendar.current.isDate($0, inSameDayAs: day!) } ?? false,
+                        onSelect: {
+                            withAnimation(.easeInOut(duration: 0.12)) {
+                                if let d = day {
+                                    if selectedCalendarDate.map({ Calendar.current.isDate($0, inSameDayAs: d) }) ?? false {
+                                        selectedCalendarDate = nil
+                                    } else {
+                                        selectedCalendarDate = d
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.bottom, 10)
+        }
+        .padding(12)
+        .background(Color("CardBackground"))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.12), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Search Field (hairline)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            TextField("Search shows...", text: $searchText)
-                .font(.system(size: 16))
+            TextField("Search shows", text: $searchText)
+                .font(.system(size: 15))
                 .foregroundStyle(.primary)
                 .autocorrectionDisabled()
 
             if !searchText.isEmpty {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        searchText = ""
-                    }
+                    withAnimation(.easeInOut(duration: 0.15)) { searchText = "" }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 15))
                         .foregroundStyle(.secondary)
                 }
+                .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color("CardBackground"))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.2 : 0.04),
-                radius: 8, x: 0, y: 2)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
+        )
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Hero Header
+    // MARK: - Selected Day Section
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private var heroHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(formattedDate)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.secondary)
-                .opacity(headerAppeared ? 1 : 0)
-                .offset(y: headerAppeared ? 0 : 8)
-                .animation(.easeOut(duration: 0.5).delay(0.05), value: headerAppeared)
-
-            Text(greetingMessage)
-                .font(.system(size: 34, weight: .bold))
-                .foregroundStyle(.primary)
-                .tracking(-0.4)
-                .opacity(headerAppeared ? 1 : 0)
-                .offset(y: headerAppeared ? 0 : 10)
-                .animation(.easeOut(duration: 0.5).delay(0.1), value: headerAppeared)
-
-            if !upcomingShows.isEmpty {
-                Text("\(upcomingShows.count) upcoming \(upcomingShows.count == 1 ? "show" : "shows")")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-                    .padding(.top, 2)
-                    .opacity(headerAppeared ? 1 : 0)
-                    .offset(y: headerAppeared ? 0 : 8)
-                    .animation(.easeOut(duration: 0.5).delay(0.15), value: headerAppeared)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Spotlight Card (Next Show)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private func spotlightCard(show: Show) -> some View {
-        NavigationLink {
-            ShowDetailView(show: show) {
-                showToEdit = show
-                isPresentingEditor = true
-            }
-        } label: {
-            VStack(spacing: 0) {
-                // Top accent stripe
-                Rectangle()
-                    .fill(Color.accentColor)
-                    .frame(height: 4)
-
-                VStack(alignment: .leading, spacing: 16) {
-                    // Badge row
-                    HStack(spacing: 8) {
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(Color.accentColor)
-                                .frame(width: 6, height: 6)
-                            Text("NEXT UP")
-                                .font(.system(size: 11, weight: .heavy))
-                                .foregroundStyle(Color.accentColor)
-                                .tracking(1.4)
-                        }
-
-                        Spacer()
-
-                        if !show.relativeDateLabel.isEmpty {
-                            Text(show.relativeDateLabel)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Color.accentColor)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.accentColor.opacity(0.1))
-                                )
-                        }
+    private func selectedDaySection(date: Date) -> some View {
+        let dayShows = showsOn(date: date)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(selectedDayLabel(date))
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        selectedCalendarDate = nil
                     }
+                } label: {
+                    Text("Clear")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
 
-                    // Main content
-                    HStack(alignment: .top, spacing: 16) {
-                        // Date block
-                        VStack(spacing: 2) {
-                            Text(monthAbbrev(from: show.dateOrNow))
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(Color.accentColor)
-                                .textCase(.uppercase)
-                            Text(dayNumber(from: show.dateOrNow))
-                                .font(.system(size: 38, weight: .light, design: .rounded))
-                                .foregroundStyle(.primary)
-                                .monospacedDigit()
-                        }
-                        .frame(width: 52)
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(show.titleOrEmpty)
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-
-                            if !show.venueOrEmpty.isEmpty {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "mappin")
-                                        .font(.system(size: 10, weight: .semibold))
-                                    Text(show.venueOrEmpty)
-                                        .lineLimit(1)
-                                }
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            }
-
-                            Text(timeString(from: show.dateOrNow))
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.tertiary)
-                        }
-
-                        Spacer(minLength: 0)
-
-                        Image(systemName: "chevron.right")
+            if dayShows.isEmpty {
+                VStack(spacing: 10) {
+                    Text("No shows on this date")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showToEdit = nil
+                        isPresentingEditor = true
+                    } label: {
+                        Text("Add a show")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.quaternary)
-                            .padding(.top, 6)
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 28)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.12), lineWidth: 1)
+                )
+            } else {
+                showRowList(dayShows, dim: false)
+            }
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Upcoming Section
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private var upcomingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("UPCOMING")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(filteredUpcomingShows.count)")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            showRowList(filteredUpcomingShows, dim: false)
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Past Shows (collapsed by default)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private var pastSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) { showPastShows.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("PAST")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundStyle(.secondary)
+                    Text("\(filteredPastShows.count)")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    Image(systemName: showPastShows ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if showPastShows {
+                showRowList(filteredPastShows, dim: true)
+            }
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Show Row List (shared)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @ViewBuilder
+    private func showRowList(_ shows: [Show], dim: Bool) -> some View {
+        LazyVStack(spacing: 0) {
+            ForEach(Array(shows.enumerated()), id: \.element.objectID) { idx, show in
+                NavigationLink {
+                    ShowDetailView(show: show) {
+                        showToEdit = show
+                        isPresentingEditor = true
+                    }
+                } label: {
+                    ShowRow(show: show)
+                        .opacity(dim ? 0.62 : 1.0)
+                }
+                .buttonStyle(RowPress())
+                .contextMenu {
+                    Button {
+                        showToEdit = show
+                        isPresentingEditor = true
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        deleteShow(show)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
                 }
-                .padding(20)
+
+                if idx < shows.count - 1 {
+                    Divider()
+                        .padding(.leading, 60)
+                }
             }
-            .background(Color("CardBackground"))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.4 : 0.08),
-                    radius: 20, x: 0, y: 8)
         }
-        .buttonStyle(CardPress())
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.12), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Quick Actions
+    // MARK: - Empty / Search Empty States
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private var quickActions: some View {
-        HStack(spacing: 12) {
-            QuickActionButton(
-                icon: "plus",
-                label: "New Show",
-                tint: Color.accentColor
-            ) {
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "calendar")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 4) {
+                Text("No shows yet")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text("Add your first gig to start your calendar.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 showToEdit = nil
                 isPresentingEditor = true
+            } label: {
+                Text("Add a show")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color("AppBackground"))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.primary))
             }
-
-            QuickActionButton(
-                icon: "doc.richtext",
-                label: "Create Flyer",
-                tint: .purple
-            ) {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                isPresentingShareSheet = true
-            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.12), lineWidth: 1)
+        )
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Calendar Section
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private var calendarSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("CALENDAR")
-                .font(.system(size: 12, weight: .bold))
+    private var searchEmptyState: some View {
+        VStack(spacing: 8) {
+            Text("No results")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary)
+            Text("No shows match \"\(searchText)\"")
+                .font(.system(size: 13))
                 .foregroundStyle(.secondary)
-                .tracking(1)
-                .padding(.leading, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+    }
 
-            VStack(spacing: 0) {
-                // Month navigation
-                HStack {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            calendarMonth = Calendar.current.date(byAdding: .month, value: -1, to: calendarMonth) ?? calendarMonth
-                        }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 36, height: 36)
-                    }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Toast
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-                    Spacer()
+    private func toast(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 12, weight: .bold))
+            Text(message)
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundStyle(Color("AppBackground"))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Capsule().fill(Color.primary))
+    }
 
-                    Text(monthYearString(from: calendarMonth))
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.primary)
-
-                    Spacer()
-
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            calendarMonth = Calendar.current.date(byAdding: .month, value: 1, to: calendarMonth) ?? calendarMonth
-                        }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 36, height: 36)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-
-                // Weekday headers
-                let weekdays = ["S", "M", "T", "W", "T", "F", "S"]
-                HStack(spacing: 0) {
-                    ForEach(Array(weekdays.enumerated()), id: \.offset) { _, day in
-                        Text(day)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.tertiary)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 6)
-
-                // Day grid
-                let days = calendarDays(for: calendarMonth)
-                let showDates = showDateSet()
-
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 4) {
-                    ForEach(Array(days.enumerated()), id: \.offset) { _, day in
-                        CalendarDayCell(
-                            day: day,
-                            hasShow: day != nil && showDates.contains(calendarDayKey(day!)),
-                            isSelected: day != nil && selectedCalendarDate.map { Calendar.current.isDate($0, inSameDayAs: day!) } ?? false,
-                            onSelect: {
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    if let d = day {
-                                        if selectedCalendarDate.map({ Calendar.current.isDate($0, inSameDayAs: d) }) ?? false {
-                                            selectedCalendarDate = nil
-                                        } else {
-                                            selectedCalendarDate = d
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 12)
-
-                // Shows on selected date
-                if let selected = selectedCalendarDate {
-                    let dayShows = showsOn(date: selected)
-                    if !dayShows.isEmpty {
-                        Divider()
-                            .padding(.horizontal, 12)
-
-                        VStack(spacing: 0) {
-                            ForEach(Array(dayShows.enumerated()), id: \.element.objectID) { idx, show in
-                                NavigationLink {
-                                    ShowDetailView(show: show) {
-                                        showToEdit = show
-                                        isPresentingEditor = true
-                                    }
-                                } label: {
-                                    ShowRow(show: show)
-                                }
-                                .buttonStyle(RowPress())
-
-                                if idx < dayShows.count - 1 {
-                                    Divider()
-                                        .padding(.leading, 68)
-                                }
-                            }
-                        }
-                    } else {
-                        VStack(spacing: 8) {
-                            Text("No shows on this date")
-                                .font(.system(size: 14))
-                                .foregroundStyle(.tertiary)
-
-                            Button {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                // Pre-set the date to the selected calendar date
-                                showToEdit = nil
-                                isPresentingEditor = true
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.system(size: 13, weight: .semibold))
-                                    Text("Add Show")
-                                        .font(.system(size: 13, weight: .semibold))
-                                }
-                                .foregroundStyle(Color.accentColor)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.vertical, 14)
-                    }
-                }
-            }
-            .background(Color("CardBackground"))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.06),
-                    radius: 12, x: 0, y: 4)
+    private func showToastBriefly(_ message: String) {
+        toastMessage = message
+        withAnimation(.spring(response: 0.4)) { showToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            withAnimation(.easeOut(duration: 0.25)) { showToast = false }
         }
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Calendar Helpers
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private func monthYearString(from date: Date) -> String {
         Self.monthYearFormatter.string(from: date)
+    }
+
+    private func selectedDayLabel(_ date: Date) -> String {
+        Self.selectedDayFormatter.string(from: date).uppercased()
     }
 
     private func calendarDays(for month: Date) -> [Date?] {
@@ -770,11 +641,7 @@ struct HomeScreenView: View {
             }
         }
 
-        // Pad trailing to fill the last row
-        while days.count % 7 != 0 {
-            days.append(nil)
-        }
-
+        while days.count % 7 != 0 { days.append(nil) }
         return days
     }
 
@@ -813,322 +680,15 @@ struct HomeScreenView: View {
         return f
     }()
 
-    private static let dayFormatter: DateFormatter = {
+    private static let selectedDayFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "d"
-        return f
-    }()
-
-    private static let monthAbbrevFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "MMM"
-        return f
-    }()
-
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a"
-        return f
-    }()
-
-    private static let fullDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "EEEE, MMMM d"
+        f.dateFormat = "EEE, MMM d"
         return f
     }()
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Upcoming Section
+    // MARK: - Sync / Delete
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private var upcomingSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("UPCOMING")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .tracking(1)
-                    .padding(.leading, 4)
-                Spacer()
-                Text("\(filteredUpcomingShows.count)")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.accentColor))
-            }
-
-            LazyVStack(spacing: 0) {
-                ForEach(Array(filteredUpcomingShows.enumerated()), id: \.element.objectID) { idx, show in
-                    NavigationLink {
-                        ShowDetailView(show: show) {
-                            showToEdit = show
-                            isPresentingEditor = true
-                        }
-                    } label: {
-                        ShowRow(show: show)
-                    }
-                    .buttonStyle(RowPress())
-                    .contextMenu {
-                        Button {
-                            showToEdit = show
-                            isPresentingEditor = true
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        Button(role: .destructive) {
-                            deleteShow(show)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-
-                    if idx < filteredUpcomingShows.count - 1 {
-                        Divider().padding(.leading, 68)
-                    }
-                }
-            }
-            .background(Color("CardBackground"))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.06),
-                    radius: 12, x: 0, y: 4)
-        }
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Past Shows Section
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private var pastShowsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("PAST SHOWS")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .tracking(1)
-                    .padding(.leading, 4)
-                Spacer()
-                Text("\(filteredPastShows.count)")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.secondary.opacity(0.15)))
-            }
-
-            LazyVStack(spacing: 0) {
-                ForEach(Array(filteredPastShows.enumerated()), id: \.element.objectID) { idx, show in
-                    NavigationLink {
-                        ShowDetailView(show: show) {
-                            showToEdit = show
-                            isPresentingEditor = true
-                        }
-                    } label: {
-                        ShowRow(show: show)
-                            .opacity(0.7)
-                    }
-                    .buttonStyle(RowPress())
-                    .contextMenu {
-                        Button {
-                            showToEdit = show
-                            isPresentingEditor = true
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        Button(role: .destructive) {
-                            deleteShow(show)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-
-                    if idx < filteredPastShows.count - 1 {
-                        Divider().padding(.leading, 68)
-                    }
-                }
-            }
-            .background(Color("CardBackground"))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.06),
-                    radius: 12, x: 0, y: 4)
-        }
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Empty State
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private var emptyState: some View {
-        VStack(spacing: 28) {
-            Spacer(minLength: 60)
-
-            ZStack {
-                // Animated pulse rings — drawingGroup to prevent rate-limit spam
-                Group {
-                    ForEach(0..<3, id: \.self) { i in
-                        Circle()
-                            .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
-                            .frame(width: 110 + CGFloat(i * 30), height: 110 + CGFloat(i * 30))
-                            .scaleEffect(emptyStateAnimated ? 1.1 : 0.9)
-                            .opacity(emptyStateAnimated ? 0.3 : 0.6)
-                            .animation(
-                                .easeInOut(duration: 2.0)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(i) * 0.3),
-                                value: emptyStateAnimated
-                            )
-                    }
-                }
-                .drawingGroup()
-                .accessibilityHidden(true)
-                .allowsHitTesting(false)
-                
-                Circle()
-                    .fill(Color.accentColor.opacity(0.08))
-                    .frame(width: 110, height: 110)
-                    .scaleEffect(emptyStateAnimated ? 1.0 : 0.95)
-                    .animation(.spring(response: 0.8, dampingFraction: 0.6), value: emptyStateAnimated)
-                
-                Image(systemName: "music.mic")
-                    .font(.system(size: 40, weight: .light))
-                    .foregroundStyle(Color.accentColor.opacity(0.7))
-                    .scaleEffect(emptyStateAnimated ? 1.0 : 0.8)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.5).delay(0.2), value: emptyStateAnimated)
-            }
-            .onAppear {
-                emptyStateAnimated = true
-            }
-
-            VStack(spacing: 10) {
-                Text("No Shows Yet")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .opacity(emptyStateAnimated ? 1 : 0)
-                    .offset(y: emptyStateAnimated ? 0 : 10)
-                    .animation(.easeOut(duration: 0.5).delay(0.3), value: emptyStateAnimated)
-
-                Text("Add your first gig to get started.\nYour lineup will appear here.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .opacity(emptyStateAnimated ? 1 : 0)
-                    .offset(y: emptyStateAnimated ? 0 : 10)
-                    .animation(.easeOut(duration: 0.5).delay(0.4), value: emptyStateAnimated)
-            }
-
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                showToEdit = nil
-                isPresentingEditor = true
-            } label: {
-                Text("Add Your First Show")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 14)
-                    .background(
-                        Capsule()
-                            .fill(Color.accentColor)
-                            .shadow(color: Color.accentColor.opacity(0.35), radius: 10, y: 5)
-                    )
-            }
-            .buttonStyle(CardPress())
-            .opacity(emptyStateAnimated ? 1 : 0)
-            .offset(y: emptyStateAnimated ? 0 : 20)
-            .animation(.easeOut(duration: 0.5).delay(0.5), value: emptyStateAnimated)
-
-            Spacer(minLength: 60)
-        }
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - FAB
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private var addButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            showToEdit = nil
-            isPresentingEditor = true
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 58, height: 58)
-                .background(
-                    Circle()
-                        .fill(Color.accentColor)
-                        .shadow(color: Color.accentColor.opacity(0.4), radius: 16, x: 0, y: 8)
-                )
-        }
-        .buttonStyle(FABStyle())
-        .accessibilityLabel("Add new show")
-        .accessibilityHint("Opens the show editor to create a new show")
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Toast
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private func toast(_ message: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 16, weight: .semibold))
-            Text(message)
-                .font(.system(size: 14, weight: .semibold))
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(
-            Capsule()
-                .fill(.black.opacity(0.8))
-                .shadow(color: .black.opacity(0.2), radius: 12, y: 5)
-        )
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Helpers
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private var greetingMessage: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 5..<12:  return "Good Morning"
-        case 12..<17: return "Good Afternoon"
-        case 17..<21: return "Good Evening"
-        default:      return "Good Evening"
-        }
-    }
-
-    private var formattedDate: String {
-        Self.fullDateFormatter.string(from: Date())
-    }
-
-    private func monthAbbrev(from date: Date) -> String {
-        Self.monthAbbrevFormatter.string(from: date)
-    }
-
-    private func dayNumber(from date: Date) -> String {
-        Self.dayFormatter.string(from: date)
-    }
-
-    private func timeString(from date: Date) -> String {
-        Self.timeFormatter.string(from: date)
-    }
-
-    private func showToastBriefly(_ message: String) {
-        toastMessage = message
-        withAnimation(.spring(response: 0.4)) {
-            showToast = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            withAnimation(.easeOut(duration: 0.3)) {
-                showToast = false
-            }
-        }
-    }
 
     private func performBackgroundSync() async {
         let bgContext = PersistenceController.shared.container.newBackgroundContext()
@@ -1166,34 +726,38 @@ private struct CalendarDayCell: View {
             Button(action: onSelect) {
                 VStack(spacing: 3) {
                     Text("\(Calendar.current.component(.day, from: day))")
-                        .font(.system(size: 15, weight: isToday ? .bold : .regular))
+                        .font(.system(size: 14, weight: isToday || isSelected ? .semibold : .regular))
                         .foregroundStyle(
-                            isSelected ? .white :
+                            isSelected ? Color("AppBackground") :
                             isToday ? Color.accentColor :
-                            .primary
+                            Color.primary
                         )
 
                     Circle()
-                        .fill(hasShow ? Color.accentColor : Color.clear)
-                        .frame(width: 5, height: 5)
+                        .fill(hasShow ? (isSelected ? Color("AppBackground") : Color.accentColor) : Color.clear)
+                        .frame(width: 4, height: 4)
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 40)
+                .frame(height: 38)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isSelected ? Color.accentColor : Color.clear)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isSelected ? Color.primary : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(isToday && !isSelected ? Color.accentColor.opacity(0.35) : Color.clear, lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
         } else {
             Color.clear
-                .frame(height: 40)
+                .frame(height: 38)
         }
     }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// MARK: - Show Row
+// MARK: - Show Row (flat, hairline)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 private struct ShowRow: View {
@@ -1208,34 +772,35 @@ private struct ShowRow: View {
                     .foregroundStyle(Color.accentColor)
                     .textCase(.uppercase)
                 Text(dayNumber(from: show.dateOrNow))
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .font(.system(size: 19, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
+                    .monospacedDigit()
             }
             .frame(width: 44, height: 44)
-            .background(Color.accentColor.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.18), lineWidth: 1)
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(show.titleOrEmpty)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     if !show.venueOrEmpty.isEmpty {
-                        HStack(spacing: 3) {
-                            Image(systemName: "mappin")
-                                .font(.system(size: 9, weight: .semibold))
-                            Text(show.venueOrEmpty)
-                                .lineLimit(1)
-                        }
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
+                        Text(show.venueOrEmpty)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Text("·")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
                     }
-
                     Text(timeString(from: show.dateOrNow))
                         .font(.system(size: showDateTextSize))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -1243,22 +808,16 @@ private struct ShowRow: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.quaternary)
+                .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
     }
 
-    private func monthAbbrev(from date: Date) -> String {
-        ShowRow.monthAbbrevFormatter.string(from: date)
-    }
-    private func dayNumber(from date: Date) -> String {
-        ShowRow.dayFormatter.string(from: date)
-    }
-    private func timeString(from date: Date) -> String {
-        ShowRow.timeFormatter.string(from: date)
-    }
+    private func monthAbbrev(from date: Date) -> String { ShowRow.monthAbbrevFormatter.string(from: date) }
+    private func dayNumber(from date: Date) -> String { ShowRow.dayFormatter.string(from: date) }
+    private func timeString(from date: Date) -> String { ShowRow.timeFormatter.string(from: date) }
 
     private static let monthAbbrevFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "MMM"; return f
@@ -1272,53 +831,8 @@ private struct ShowRow: View {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// MARK: - Quick Action Button
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-private struct QuickActionButton: View {
-    let icon: String
-    let label: String
-    let tint: Color
-    let action: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 42, height: 42)
-                    .background(tint.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                Text(label)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .background(Color("CardBackground"))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.06),
-                    radius: 12, x: 0, y: 4)
-        }
-        .buttonStyle(CardPress())
-    }
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // MARK: - Button Styles
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-private struct CardPress: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
-    }
-}
 
 private struct RowPress: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -1328,60 +842,7 @@ private struct RowPress: ButtonStyle {
     }
 }
 
-private struct FABStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.88 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
-    }
-}
-
 #Preview {
     HomeScreenView()
         .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// MARK: - Skeleton View
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-private struct SkeletonView: View {
-    var width: CGFloat? = nil
-    var height: CGFloat = 20
-    
-    @State private var isAnimating = false
-    
-    var body: some View {
-        RoundedRectangle(cornerRadius: height / 3, style: .continuous)
-            .fill(Color.secondary.opacity(0.12))
-            .frame(width: width, height: height)
-            .frame(maxWidth: width == nil ? .infinity : nil)
-            .overlay(
-                GeometryReader { geo in
-                    RoundedRectangle(cornerRadius: height / 3, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.clear,
-                                    Color.white.opacity(0.2),
-                                    Color.clear
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(geo.size.width * 0.6, 1))
-                        .offset(x: isAnimating ? geo.size.width : -geo.size.width * 0.6)
-                }
-                .clipped()
-            )
-            .clipShape(RoundedRectangle(cornerRadius: height / 3, style: .continuous))
-            .drawingGroup()
-            .accessibilityHidden(true)
-            .onAppear {
-                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                    isAnimating = true
-                }
-            }
-    }
 }

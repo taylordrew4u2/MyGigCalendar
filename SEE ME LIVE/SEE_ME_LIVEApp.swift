@@ -22,8 +22,12 @@ struct SEE_ME_LIVEApp: App {
         WindowGroup {
             ZStack {
                 if showSplash {
-                    SplashScreenView()
-                        .transition(.opacity)
+                    SplashScreenView {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            showSplash = false
+                        }
+                    }
+                    .transition(.opacity)
                 } else {
                     HomeScreenView()
                         .transition(.opacity)
@@ -32,14 +36,6 @@ struct SEE_ME_LIVEApp: App {
             .environment(\.managedObjectContext,
                           persistenceController.container.viewContext)
             .tint(Color.accentColor)
-            .onAppear {
-                // Show splash for 2.5 seconds
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        showSplash = false
-                    }
-                }
-            }
             .onReceive(NotificationCenter.default.publisher(
                 for: UIApplication.willEnterForegroundNotification)) { _ in
                 // Retry any pending public CloudKit operations when

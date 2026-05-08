@@ -11,19 +11,19 @@ import PhotosUI
 // MARK: - Editor Tab
 
 private enum EditorTab: String, CaseIterable {
-    case presets  = "Presets"
+    case presets  = "Templates"
     case layout   = "Layout"
     case text     = "Text"
-    case colors   = "Colors"
-    case elements = "Elements"
+    case colors   = "Color"
+    case elements = "Image"
 
     var icon: String {
         switch self {
-        case .presets:  return "wand.and.stars"
+        case .presets:  return "rectangle.stack"
         case .layout:   return "square.grid.2x2"
         case .text:     return "textformat"
         case .colors:   return "paintpalette"
-        case .elements: return "photo.on.rectangle"
+        case .elements: return "photo"
         }
     }
 }
@@ -36,23 +36,17 @@ struct ShareImageEditorView: View {
     let shows: [Show]
     let performerName: String
 
-    // ── Preset palette ──
+    // ── Preset palette (curated) ──
     private static let presetColors: [String] = [
         "#FFFFFF", "#F5F5F5", "#000000", "#1C1C1E",
-        "#EB2429", "#FF6B6B", "#FF9500", "#FFCC00",
-        "#34C759", "#00C9A7", "#007AFF", "#5856D6",
-        "#AF52DE", "#FF2D55", "#CC7057", "#8B5CF6"
+        "#EB2429", "#007AFF", "#34C759", "#FFCC00"
     ]
 
     private static let gradientPresets: [(from: String, to: String, label: String, icon: String)] = [
-        ("#1A0A00", "#3D1C00", "Amber",  "flame"),
-        ("#0F0C29", "#302B63", "Violet", "sparkles"),
         ("#000000", "#434343", "Noir",   "moon.fill"),
-        ("#2C3E50", "#4CA1AF", "Ocean",  "water.waves"),
-        ("#FF416C", "#FF4B2B", "Sunset", "sun.horizon"),
+        ("#1A0A00", "#3D1C00", "Amber",  "flame"),
         ("#141E30", "#243B55", "Royal",  "crown"),
-        ("#0F2027", "#2C5364", "Deep",   "drop.fill"),
-        ("#200122", "#6F0000", "Wine",   "wineglass"),
+        ("#FF416C", "#FF4B2B", "Sunset", "sun.horizon"),
     ]
 
     private static let fontWeights: [(weight: String, label: String)] = [
