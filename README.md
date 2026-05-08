@@ -105,15 +105,11 @@ An iOS app for performers to log upcoming shows, automatically sync them to the 
    ```
    https://YOURUSERNAME.github.io/seemelive?user=YOUR_USER_ID
    ```
-7. Update the `baseURL` in `ShareLinkService.swift` to match your GitHub Pages URL.
+7. Update the calendar feed host in `docs/index.html` to match your GitHub Pages URL.
 
 ### 7. Update the Share Link in the App
 
-In `ShareLinkService.swift`, change:
-```swift
-private static let baseURL = "https://yourusername.github.io/seemelive"
-```
-to your actual GitHub Pages URL.
+The public profile URL is built directly from the user ID in `docs/index.html`. Change the `seemelive.vercel.app` host in that file if you are deploying to a different domain.
 
 ---
 
@@ -168,7 +164,6 @@ SEE ME LIVE/
 │   ├── UserIdentityService.swift   # UUID generation
 │   ├── CalendarService.swift       # EventKit integration
 │   ├── PublicCloudSyncService.swift # Public CloudKit CRUD + queue
-│   ├── ShareLinkService.swift      # Shareable URL builder
 │   ├── Info.plist                  # Usage descriptions
 │   ├── SEE_ME_LIVE.entitlements    # CloudKit entitlements
 │   ├── SEE_ME_LIVE.xcdatamodeld/   # Core Data model (Show entity)

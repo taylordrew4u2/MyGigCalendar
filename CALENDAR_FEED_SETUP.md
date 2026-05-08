@@ -13,15 +13,14 @@ The SEE ME LIVE app now supports sharing your shows through a stable calendar fe
 
 ## Implementation
 
-### 1. ShareLinkService.swift
+### 1. Calendar Feed URL
 
-Added a new method to generate the calendar feed URL:
+The public calendar page builds the feed URL inline from the user ID:
 
-```swift
-static func calendarFeedURL(for userID: String) -> URL
 ```
-
-This generates a URL like: `https://yourdomain.com/calendar.ics?user=USER_ID`
+https://seemelive.vercel.app/calendar.ics?user=USER_ID
+webcal://seemelive.vercel.app/calendar.ics?user=USER_ID
+```
 
 ### 2. Web Endpoint (calendar.ics)
 
@@ -31,18 +30,7 @@ You need to deploy a serverless function or backend endpoint that:
 - Converts the results to iCalendar (ICS) format
 - Returns the response with `Content-Type: text/calendar`
 
-### 3. ShareLinkSheetView.swift
-
-Updated to show both sharing options:
-- **Web Link**: Direct link to browse shows on the web
-- **Calendar Feed**: iCalendar URL to add to calendar apps
-
-Users can:
-- Copy the calendar feed URL
-- Share it directly to calendar apps (Apple Calendar, Google Calendar)
-- Add it to their calendar for automatic updates
-
-### 4. Web Calendar Page (docs/index.html)
+### 3. Web Calendar Page (docs/index.html)
 
 Added a subscription section that appears when users visit the calendar link. It provides buttons to:
 - Open in Apple Calendar (via `webcal://` protocol)
@@ -54,10 +42,10 @@ Added a subscription section that appears when users visit the calendar link. It
 1. **Deploy the calendar.ics endpoint**:
    - Use the provided `docs/calendar.ics.js` as a template
    - Deploy to Vercel, AWS Lambda, Firebase Functions, or similar
-   - Update the `calendarFeedURL()` method if your endpoint URL differs
+   - Update the feed URL in `docs/index.html` if your endpoint differs
 
 2. **Update the base URL**:
-   - Modify `ShareLinkService.baseURL` if not using the default domain
+   - Update the `seemelive.vercel.app` host in `docs/index.html` if not using the default domain
    - Ensure the deployment URL matches
 
 3. **Test**:

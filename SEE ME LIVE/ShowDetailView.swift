@@ -14,7 +14,6 @@ struct ShowDetailView: View {
     @ObservedObject var show: Show
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("showDateTextSize") private var showDateTextSize: Double = 12
 
     let onEdit: () -> Void
@@ -365,7 +364,6 @@ private struct InfoCard: View {
     let label: String
     let value: String
     let valueFontSize: Double?
-    @Environment(\.colorScheme) private var colorScheme
 
     init(icon: String, label: String, value: String, valueFontSize: Double? = nil) {
         self.icon = icon
