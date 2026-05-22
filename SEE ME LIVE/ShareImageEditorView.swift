@@ -8,6 +8,9 @@
 import SwiftUI
 import PhotosUI
 import CoreImage
+import AVFoundation
+import CoreTransferable
+import UniformTypeIdentifiers
 
 // MARK: - Color Hex Init
 
@@ -171,8 +174,11 @@ struct ShareImageEditorView: View {
     @State private var gradFrom: Color = Color(hex: "#1A0A00") ?? .black
     @State private var gradTo: Color = Color(hex: "#3D1C00") ?? .brown
     @State private var bgPhotoItem: PhotosPickerItem?
+    @State private var bgVideoItem: PhotosPickerItem?
     @State private var bgPhotoData: Data?
+    @State private var bgVideoFrameData: Data?
     @State private var bgPhotoThumb: UIImage?
+    @State private var bgVideoThumb: UIImage?
 
     // Overlays
     @State private var overlays: [TextOverlay] = []
@@ -477,6 +483,10 @@ struct ShareImageEditorView: View {
         case blurAndWatermark
     }
 
+    private var selectedBackgroundThumbnail: UIImage? {
+        bgKind == .video ? bgVideoThumb : bgPhotoThumb
+    }
+
     private var screenshotMessage: some View {
         Text("Remove the watermark for clean exports.")
             .font(.system(size: 12, weight: .semibold))
@@ -629,18 +639,39 @@ struct ShareImageEditorView: View {
                     .background(Color.white.opacity(0.1), in: Capsule())
                 }
 
-                if let thumb = bgPhotoThumb {
-                    Image(uiImage: thumb)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                PhotosPicker(selection: $bgVideoItem, matching: .videos) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "video.fill")
+                            .font(.system(size: 14))
+                        Text(bgVideoFrameData != nil ? "Change Video" : "Use Video Background")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.white.opacity(0.1), in: Capsule())
+                }
+
+                if let mediaThumb = selectedBackgroundThumbnail {
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(uiImage: mediaThumb)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 40, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                        if bgKind == .video {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(4)
+                                .background(.black.opacity(0.6), in: Circle())
+                                .padding(3)
+                        }
+                    }
 
                     Button {
-                        bgPhotoData = nil
-                        bgPhotoThumb = nil
-                        bgPhotoItem = nil
-                        bgKind = .gradient
+                        clearMediaBackground()
                         regeneratePreview()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -651,6 +682,9 @@ struct ShareImageEditorView: View {
             }
             .onChange(of: bgPhotoItem) { _, newItem in
                 Task { await loadBGPhoto(from: newItem) }
+            }
+            .onChange(of: bgVideoItem) { _, newItem in
+                Task { await loadBGVideo(from: newItem) }
             }
         }
     }
@@ -1100,7 +1134,7 @@ struct ShareImageEditorView: View {
 
     private var elementsPanel: some View {
         VStack(alignment: .leading, spacing: 20) {
-            sectionLabel("BACKGROUND IMAGE")
+            sectionLabel("BACKGROUND MEDIA")
 
             HStack(spacing: 12) {
                 PhotosPicker(selection: $bgPhotoItem, matching: .images) {
@@ -1116,18 +1150,39 @@ struct ShareImageEditorView: View {
                     .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
-                if let thumb = bgPhotoThumb {
-                    Image(uiImage: thumb)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 44, height: 44)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                PhotosPicker(selection: $bgVideoItem, matching: .videos) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "video.fill")
+                            .font(.system(size: 15))
+                        Text(bgVideoFrameData != nil ? "Change Video" : "Choose Video")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                if let mediaThumb = selectedBackgroundThumbnail {
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(uiImage: mediaThumb)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 44, height: 44)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                        if bgKind == .video {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(4)
+                                .background(.black.opacity(0.6), in: Circle())
+                                .padding(3)
+                        }
+                    }
 
                     Button {
-                        bgPhotoData = nil
-                        bgPhotoThumb = nil
-                        bgPhotoItem = nil
-                        bgKind = .gradient
+                        clearMediaBackground()
                         regeneratePreview()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -1140,6 +1195,9 @@ struct ShareImageEditorView: View {
             }
             .onChange(of: bgPhotoItem) { _, newItem in
                 Task { await loadBGPhoto(from: newItem) }
+            }
+            .onChange(of: bgVideoItem) { _, newItem in
+                Task { await loadBGVideo(from: newItem) }
             }
 
             sectionLabel("TEXT OVERLAYS (\(overlays.count))")
@@ -1314,6 +1372,7 @@ struct ShareImageEditorView: View {
         bg.gradientFromHex = colorHex(gradFrom)
         bg.gradientToHex = colorHex(gradTo)
         bg.photoData = bgPhotoData
+        bg.videoFrameData = bgVideoFrameData
         return bg
     }
 
@@ -1436,10 +1495,50 @@ struct ShareImageEditorView: View {
             await MainActor.run {
                 bgPhotoData = processed
                 bgPhotoThumb = thumb
+                bgVideoFrameData = nil
+                bgVideoThumb = nil
+                bgVideoItem = nil
                 bgKind = .photo
                 regeneratePreview()
             }
         }
+    }
+
+    private func loadBGVideo(from item: PhotosPickerItem?) async {
+        guard let item else { return }
+        guard let pickedVideo = try? await item.loadTransferable(type: PickedBackgroundVideo.self) else { return }
+
+        let processed = await Task.detached(priority: .userInitiated) {
+            videoBackgroundFrameData(from: pickedVideo.url)
+        }.value
+
+        try? FileManager.default.removeItem(at: pickedVideo.url)
+
+        guard let processed else { return }
+
+        let thumb = await Task.detached(priority: .userInitiated) {
+            UIImage(data: processed)?.preparingThumbnail(of: CGSize(width: 300, height: 300))
+        }.value
+
+        await MainActor.run {
+            bgVideoFrameData = processed
+            bgVideoThumb = thumb
+            bgPhotoData = nil
+            bgPhotoThumb = nil
+            bgPhotoItem = nil
+            bgKind = .video
+            regeneratePreview()
+        }
+    }
+
+    private func clearMediaBackground() {
+        bgPhotoData = nil
+        bgPhotoThumb = nil
+        bgPhotoItem = nil
+        bgVideoFrameData = nil
+        bgVideoThumb = nil
+        bgVideoItem = nil
+        bgKind = .gradient
     }
 
     private func restoreSavedOptions() {
@@ -1452,8 +1551,12 @@ struct ShareImageEditorView: View {
             accentColor = Color(hex: saved.accentHex) ?? accentColor
             overlays = saved.textOverlays
             bgPhotoData = saved.customBackground.photoData
+            bgVideoFrameData = saved.customBackground.videoFrameData
             if let data = bgPhotoData {
                 bgPhotoThumb = UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 300, height: 300))
+            }
+            if let data = bgVideoFrameData {
+                bgVideoThumb = UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 300, height: 300))
             }
             return
         }
@@ -1471,7 +1574,8 @@ struct ShareImageEditorView: View {
         saved.backgroundStyle = .custom
         saved.customBackground = buildCustomBG()
         saved.customBackground.photoData = nil
-        if saved.customBackground.kind == .photo {
+        saved.customBackground.videoFrameData = nil
+        if saved.customBackground.kind == .photo || saved.customBackground.kind == .video {
             saved.customBackground.kind = .gradient
         }
         saved.textOverlays = overlays
@@ -1501,6 +1605,41 @@ private func downscaledBackgroundData(_ data: Data, maxDimension: CGFloat = 2400
         }
     }
     return resized.jpegData(compressionQuality: 0.82) ?? data
+}
+
+private func videoBackgroundFrameData(from url: URL, maxDimension: CGFloat = 2400) -> Data? {
+    let asset = AVAsset(url: url)
+    let generator = AVAssetImageGenerator(asset: asset)
+    generator.appliesPreferredTrackTransform = true
+    generator.maximumSize = CGSize(width: maxDimension, height: maxDimension)
+
+    let time = CMTime(seconds: 0.1, preferredTimescale: 600)
+    guard let cgImage = try? generator.copyCGImage(at: time, actualTime: nil) else {
+        return nil
+    }
+
+    let image = UIImage(cgImage: cgImage)
+    guard let data = image.jpegData(compressionQuality: 0.82) else {
+        return nil
+    }
+    return downscaledBackgroundData(data, maxDimension: maxDimension)
+}
+
+private struct PickedBackgroundVideo: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .movie) { received in
+            let sourceURL = received.file
+            let fileExtension = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
+            let destinationURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension(fileExtension)
+
+            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+            return PickedBackgroundVideo(url: destinationURL)
+        }
+    }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

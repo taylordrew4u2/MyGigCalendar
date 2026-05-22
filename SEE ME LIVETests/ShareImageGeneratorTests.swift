@@ -165,6 +165,7 @@ final class ShareImageGeneratorTests: XCTestCase {
         XCTAssertEqual(bg.gradientFromHex, "#1A0A00")
         XCTAssertEqual(bg.gradientToHex, "#3D1C00")
         XCTAssertNil(bg.photoData)
+        XCTAssertNil(bg.videoFrameData)
     }
 
     // MARK: - Helper

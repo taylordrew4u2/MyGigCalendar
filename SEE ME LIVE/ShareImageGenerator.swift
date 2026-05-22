@@ -74,12 +74,13 @@ enum BackgroundStyle: String, CaseIterable, Identifiable, Codable {
 // MARK: - Custom Background Descriptor
 
 struct CustomBackground: Codable {
-    enum Kind: Codable { case solidColor, gradient, photo }
+    enum Kind: Codable { case solidColor, gradient, photo, video }
     var kind: Kind = .solidColor
     var solidHex: String = "#1A0A00"
     var gradientFromHex: String = "#1A0A00"
     var gradientToHex: String = "#3D1C00"
     var photoData: Data? = nil
+    var videoFrameData: Data? = nil
 }
 
 // MARK: - Text Overlay Descriptor
@@ -1104,8 +1105,9 @@ enum ShareImageGenerator {
                         ctx.drawLinearGradient(grad, start: .zero,
                                                end: CGPoint(x: 0, y: rect.height), options: [])
                     }
-                case .photo:
-                    if let data = bg.photoData, let img = UIImage(data: data) {
+                case .photo, .video:
+                    let imageData = bg.kind == .photo ? bg.photoData : bg.videoFrameData
+                    if let data = imageData, let img = UIImage(data: data) {
                         drawImageFill(img, in: rect, ctx: ctx)
                     } else {
                         ctx.setFillColor(UIColor(hex: "#111111").cgColor); ctx.fill(rect)
