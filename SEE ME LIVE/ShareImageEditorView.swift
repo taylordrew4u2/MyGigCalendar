@@ -177,6 +177,7 @@ struct ShareImageEditorView: View {
     @State private var bgVideoItem: PhotosPickerItem?
     @State private var bgPhotoData: Data?
     @State private var bgVideoFrameData: Data?
+    @State private var bgVideoURL: URL?
     @State private var bgPhotoThumb: UIImage?
     @State private var bgVideoThumb: UIImage?
 
@@ -1448,14 +1449,38 @@ struct ShareImageEditorView: View {
 
         Task { @MainActor in
             isRendering = true
-            let image = await Task.detached(priority: .userInitiated) {
-                let rendered = ShareImageGenerator.generate(snapshots: snapshots, performerName: name, options: opts,
-                                                            showsWatermark: showsWatermark)
-                return mode == .blurAndWatermark ? Self.blurredExportImage(rendered) : rendered
-            }.value
+            let activityItem: Any
+            if bgKind == .video, let bgVideoURL {
+                do {
+                    let videoURL = try await Task.detached(priority: .userInitiated) {
+                        try await Self.exportVideoBackground(
+                            sourceURL: bgVideoURL,
+                            snapshots: snapshots,
+                            performerName: name,
+                            options: opts,
+                            showsWatermark: showsWatermark
+                        )
+                    }.value
+                    activityItem = videoURL
+                } catch {
+                    let rendered = await Task.detached(priority: .userInitiated) {
+                        let rendered = ShareImageGenerator.generate(snapshots: snapshots, performerName: name, options: opts,
+                                                                    showsWatermark: showsWatermark)
+                        return mode == .blurAndWatermark ? Self.blurredExportImage(rendered) : rendered
+                    }.value
+                    activityItem = rendered
+                }
+            } else {
+                let image = await Task.detached(priority: .userInitiated) {
+                    let rendered = ShareImageGenerator.generate(snapshots: snapshots, performerName: name, options: opts,
+                                                                showsWatermark: showsWatermark)
+                    return mode == .blurAndWatermark ? Self.blurredExportImage(rendered) : rendered
+                }.value
+                activityItem = image
+            }
             isRendering = false
 
-            let vc = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+            let vc = UIActivityViewController(activityItems: [activityItem], applicationActivities: nil)
             guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                   let root = scene.windows.first?.rootViewController else { return }
             var top = root
@@ -1481,6 +1506,121 @@ struct ShareImageEditorView: View {
         }
 
         return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+    }
+
+    nonisolated private static func exportVideoBackground(
+        sourceURL: URL,
+        snapshots: [ShowSnapshot],
+        performerName: String,
+        options: ExportOptions,
+        showsWatermark: Bool
+    ) async throws -> URL {
+        let asset = AVAsset(url: sourceURL)
+        let composition = AVMutableComposition()
+
+        guard let sourceVideoTrack = try await asset.loadTracks(withMediaType: .video).first,
+              let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video,
+                                                                      preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw VideoBackgroundExportError.missingVideoTrack
+        }
+
+        let duration = try await asset.load(.duration)
+        let fullRange = CMTimeRange(start: .zero, duration: duration)
+        try compositionVideoTrack.insertTimeRange(fullRange, of: sourceVideoTrack, at: .zero)
+
+        for sourceAudioTrack in try await asset.loadTracks(withMediaType: .audio) {
+            guard let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio,
+                                                                         preferredTrackID: kCMPersistentTrackID_Invalid) else {
+                continue
+            }
+            try? compositionAudioTrack.insertTimeRange(fullRange, of: sourceAudioTrack, at: .zero)
+        }
+
+        let renderSize = options.sizePreset.size
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = fullRange
+
+        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
+        layerInstruction.setTransform(try await videoFillTransform(for: sourceVideoTrack, renderSize: renderSize), at: .zero)
+        instruction.layerInstructions = [layerInstruction]
+
+        let videoComposition = AVMutableVideoComposition()
+        videoComposition.renderSize = renderSize
+        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.instructions = [instruction]
+
+        let parentLayer = CALayer()
+        let videoLayer = CALayer()
+        let overlayLayer = CALayer()
+        let frame = CGRect(origin: .zero, size: renderSize)
+
+        parentLayer.frame = frame
+        videoLayer.frame = frame
+        overlayLayer.frame = frame
+        overlayLayer.contentsGravity = .resizeAspectFill
+        overlayLayer.contentsScale = 1
+
+        var overlayOptions = options
+        overlayOptions.backgroundStyle = .custom
+        overlayOptions.customBackground.kind = .gradient
+        overlayOptions.customBackground.photoData = nil
+        overlayOptions.customBackground.videoFrameData = nil
+
+        let overlayImage = ShareImageGenerator.generateOverlay(
+            snapshots: snapshots,
+            performerName: performerName,
+            options: overlayOptions,
+            showsWatermark: showsWatermark
+        )
+        overlayLayer.contents = overlayImage.cgImage
+
+        parentLayer.addSublayer(videoLayer)
+        parentLayer.addSublayer(overlayLayer)
+        videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
+            postProcessingAsVideoLayer: videoLayer,
+            in: parentLayer
+        )
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SEE-ME-LIVE-\(UUID().uuidString)")
+            .appendingPathExtension("mp4")
+        try? FileManager.default.removeItem(at: outputURL)
+
+        guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            throw VideoBackgroundExportError.exportSessionUnavailable
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.videoComposition = videoComposition
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        await withCheckedContinuation { continuation in
+            exportSession.exportAsynchronously {
+                continuation.resume()
+            }
+        }
+
+        if exportSession.status == .completed {
+            return outputURL
+        }
+
+        throw exportSession.error ?? VideoBackgroundExportError.exportFailed
+    }
+
+    nonisolated private static func videoFillTransform(for track: AVAssetTrack, renderSize: CGSize) async throws -> CGAffineTransform {
+        let preferredTransform = try await track.load(.preferredTransform)
+        let naturalTrackSize = try await track.load(.naturalSize)
+        let transformedRect = CGRect(origin: .zero, size: naturalTrackSize).applying(preferredTransform)
+        let naturalSize = CGSize(width: abs(transformedRect.width), height: abs(transformedRect.height))
+        let scale = max(renderSize.width / max(naturalSize.width, 1), renderSize.height / max(naturalSize.height, 1))
+        let scaledSize = CGSize(width: naturalSize.width * scale, height: naturalSize.height * scale)
+        let tx = (renderSize.width - scaledSize.width) * 0.5 - transformedRect.minX * scale
+        let ty = (renderSize.height - scaledSize.height) * 0.5 - transformedRect.minY * scale
+
+        return preferredTransform
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(translationX: tx, y: ty))
     }
 
     private func loadBGPhoto(from item: PhotosPickerItem?) async {
@@ -1512,8 +1652,6 @@ struct ShareImageEditorView: View {
             videoBackgroundFrameData(from: pickedVideo.url)
         }.value
 
-        try? FileManager.default.removeItem(at: pickedVideo.url)
-
         guard let processed else { return }
 
         let thumb = await Task.detached(priority: .userInitiated) {
@@ -1523,6 +1661,10 @@ struct ShareImageEditorView: View {
         await MainActor.run {
             bgVideoFrameData = processed
             bgVideoThumb = thumb
+            if let oldURL = bgVideoURL, oldURL != pickedVideo.url {
+                try? FileManager.default.removeItem(at: oldURL)
+            }
+            bgVideoURL = pickedVideo.url
             bgPhotoData = nil
             bgPhotoThumb = nil
             bgPhotoItem = nil
@@ -1537,6 +1679,10 @@ struct ShareImageEditorView: View {
         bgPhotoItem = nil
         bgVideoFrameData = nil
         bgVideoThumb = nil
+        if let bgVideoURL {
+            try? FileManager.default.removeItem(at: bgVideoURL)
+        }
+        bgVideoURL = nil
         bgVideoItem = nil
         bgKind = .gradient
     }
@@ -1640,6 +1786,12 @@ private struct PickedBackgroundVideo: Transferable {
             return PickedBackgroundVideo(url: destinationURL)
         }
     }
+}
+
+private enum VideoBackgroundExportError: Error {
+    case missingVideoTrack
+    case exportSessionUnavailable
+    case exportFailed
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

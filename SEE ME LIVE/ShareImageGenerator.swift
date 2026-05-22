@@ -397,17 +397,26 @@ enum ShareImageGenerator {
                       showsWatermark: showsWatermark, watermarkStyle: watermarkStyle)
     }
 
+    static func generateOverlay(snapshots: [ShowSnapshot], performerName: String, options: ExportOptions,
+                                showsWatermark: Bool = true, watermarkStyle: WatermarkStyle = .export) -> UIImage {
+        let size = options.sizePreset.size
+        return render(snapshots: snapshots, performerName: performerName, options: options, size: size,
+                      showsWatermark: showsWatermark, watermarkStyle: watermarkStyle, drawsBackground: false)
+    }
+
     private static func render(snapshots: [ShowSnapshot], performerName: String, options: ExportOptions,
-                               size: CGSize, showsWatermark: Bool, watermarkStyle: WatermarkStyle) -> UIImage {
+                               size: CGSize, showsWatermark: Bool, watermarkStyle: WatermarkStyle,
+                               drawsBackground: Bool = true) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.preferredRange = .standard
+        format.opaque = drawsBackground
 
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return autoreleasepool {
             renderer.image { ctx in
                 drawCanvas(in: ctx.cgContext, size: size, snapshots: snapshots,
-                           performerName: performerName, options: options)
+                           performerName: performerName, options: options, drawsBackground: drawsBackground)
                 if showsWatermark {
                     drawWatermark(in: ctx.cgContext, size: size, options: options, style: watermarkStyle)
                 }
@@ -439,16 +448,19 @@ enum ShareImageGenerator {
     // MARK: - Main Canvas
 
     private static func drawCanvas(in ctx: CGContext, size: CGSize, snapshots: [ShowSnapshot],
-                                    performerName: String, options: ExportOptions) {
+                                    performerName: String, options: ExportOptions,
+                                    drawsBackground: Bool = true) {
         let rect = CGRect(origin: .zero, size: size)
         let allShows = snapshots.sorted { $0.dateOrNow < $1.dateOrNow }
         let featured = allShows.first
         let accent = UIColor(hex: options.accentHex)
-        let isLight = options.backgroundStyle == .light
+        let isLight = drawsBackground && options.backgroundStyle == .light
 
         // 1. Background
-        drawBackground(ctx: ctx, rect: rect, featured: featured,
-                       style: options.backgroundStyle, customBG: options.customBackground)
+        if drawsBackground {
+            drawBackground(ctx: ctx, rect: rect, featured: featured,
+                           style: options.backgroundStyle, customBG: options.customBackground)
+        }
 
         // 2. Scrim overlay for readability
         let scrimAlpha: CGFloat = isLight ? options.scrimIntensity * 0.1 : options.scrimIntensity
