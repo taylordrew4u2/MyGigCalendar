@@ -2103,7 +2103,13 @@ struct RemoveWatermarkSheet: View {
             Spacer(minLength: 4)
 
             Button {
-                Task { await purchaseManager.purchaseRemoveWatermark() }
+                Task {
+                    if purchaseManager.canRetryProductLoad {
+                        await purchaseManager.loadProducts()
+                    } else {
+                        await purchaseManager.purchaseRemoveWatermark()
+                    }
+                }
             } label: {
                 HStack {
                     if purchaseManager.isPurchasing || purchaseManager.isLoadingProducts {
@@ -2147,12 +2153,16 @@ struct RemoveWatermarkSheet: View {
             return "Purchased"
         }
 
+        if purchaseManager.isPurchasePending {
+            return "Pending Approval"
+        }
+
         if purchaseManager.isLoadingProducts {
             return "Loading..."
         }
 
         if purchaseManager.removeWatermarkProduct == nil {
-            return "Unavailable"
+            return "Try Again"
         }
 
         if let price = purchaseManager.removeWatermarkPriceText {
@@ -2164,9 +2174,10 @@ struct RemoveWatermarkSheet: View {
 
     private var primaryButtonEnabled: Bool {
         !purchaseManager.hasRemovedWatermark &&
+        !purchaseManager.isPurchasePending &&
         !purchaseManager.isLoadingProducts &&
         !purchaseManager.isPurchasing &&
-        purchaseManager.removeWatermarkProduct != nil
+        (purchaseManager.removeWatermarkProduct != nil || purchaseManager.canRetryProductLoad)
     }
 }
 

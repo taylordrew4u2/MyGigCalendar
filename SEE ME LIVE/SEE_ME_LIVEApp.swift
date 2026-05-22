@@ -46,6 +46,9 @@ struct SEE_ME_LIVEApp: App {
             .environment(\.managedObjectContext,
                           persistenceController.container.viewContext)
             .tint(Color.accentColor)
+            .task {
+                await PurchaseManager.shared.prepareForLaunch()
+            }
             .onReceive(NotificationCenter.default.publisher(
                 for: UIApplication.willEnterForegroundNotification)) { _ in
                 Task.detached {
