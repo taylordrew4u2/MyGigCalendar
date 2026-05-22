@@ -1,0 +1,37 @@
+{
+  "identifier": "D2B9A73C-6B42-432F-8D5A-4E2D9B5C671A",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "7B38F1E6-2758-4C60-B8C1-1F52DE6A81C2",
+      "localizations": [
+        {
+          "description": "Remove the watermark and unlock clean exports.",
+          "displayName": "Remove Watermark",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "comedy.SEEMELIVE.remove_watermark",
+      "referenceName": "Remove Watermark",
+      "type": "NonConsumable"
+    }
+  ],
+  "settings": {
+    "_applicationInternalID": "0",
+    "_askToBuyEnabled": false,
+    "_billingGracePeriodEnabled": false,
+    "_billingRetryEnabled": false,
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": [],
+    "_timeRate": 0
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 4,
+    "minor": 0
+  }
+}
