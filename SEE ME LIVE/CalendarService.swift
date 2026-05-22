@@ -64,28 +64,12 @@ final class CalendarService {
         }
 
         // Populate event fields.
-        var title = show.title ?? "Show"
-        if let role = show.role, !role.isEmpty {
-            title += " (\(role))"
-        }
-        event.title = title
+        event.title = show.title ?? "Show"
         event.location = show.venue
         event.startDate = show.date ?? Date()
         event.endDate = Calendar.current.date(byAdding: .hour, value: 2, to: event.startDate) ?? event.startDate
 
-        if let link = show.ticketLink, let url = URL(string: link) {
-            event.url = url
-        }
-
-        // Build notes string.
-        var noteParts: [String] = []
-        if show.price > 0 {
-            noteParts.append(String(format: "Price: $%.2f", show.price))
-        }
-        if let notes = show.notes, !notes.isEmpty {
-            noteParts.append(notes)
-        }
-        event.notes = noteParts.isEmpty ? nil : noteParts.joined(separator: "\n")
+        event.notes = nil
 
         // Reminder alarm (1 hour before).
         event.alarms?.forEach { event.removeAlarm($0) }

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import CoreImage
 
 // MARK: - Color Hex Init
 
@@ -30,19 +31,19 @@ private extension Color {
 // MARK: - Editor Tab
 
 private enum EditorTab: String, CaseIterable {
-    case presets  = "Templates"
+    case presets  = "Style"
     case layout   = "Layout"
     case text     = "Text"
-    case colors   = "Color"
-    case elements = "Image"
+    case colors   = "Colors"
+    case elements = "Fine-tune"
 
     var icon: String {
         switch self {
-        case .presets:  return "rectangle.stack"
+        case .presets:  return "paintbrush.pointed"
         case .layout:   return "square.grid.2x2"
         case .text:     return "textformat"
         case .colors:   return "paintpalette"
-        case .elements: return "photo"
+        case .elements: return "slider.horizontal.3"
         }
     }
 }
@@ -51,6 +52,7 @@ private enum EditorTab: String, CaseIterable {
 
 struct ShareImageEditorView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var purchaseManager = PurchaseManager.shared
 
     let shows: [Show]
     let performerName: String
@@ -155,8 +157,13 @@ struct ShareImageEditorView: View {
     @State private var cachedImage = UIImage()
     @State private var renderTask: Task<Void, Never>?
     @State private var isRendering = false
-    @State private var debounceTask: Task<Void, Never>?
+    @State private var debounceWorkItem: DispatchWorkItem?
     @State private var selectedTab: EditorTab = .presets
+    @State private var showRemoveWatermarkSheet = false
+    @State private var showExportOptions = false
+    @State private var isScreenCaptured = UIScreen.main.isCaptured
+    @State private var showScreenshotMessage = false
+    @AppStorage("shareImageEditor.lastOptions") private var savedOptionsData = Data()
 
     // Background
     @State private var bgKind: CustomBackground.Kind = .gradient
@@ -186,23 +193,25 @@ struct ShareImageEditorView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    // ── PINNED PREVIEW ──
-                    canvasPreview
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
+                GeometryReader { geo in
+                    VStack(spacing: 0) {
+                        // ── PINNED PREVIEW ──
+                        canvasPreview(availableHeight: geo.size.height)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 8)
 
-                    // ── QUICK ACTION BAR ──
-                    quickActionBar
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+                        // ── QUICK ACTION BAR ──
+                        quickActionBar
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
 
-                    // ── TAB BAR ──
-                    tabBar
+                        // ── TAB BAR ──
+                        tabBar
 
-                    // ── TAB CONTENT ──
-                    tabContent
-                        .frame(maxHeight: .infinity)
+                        // ── TAB CONTENT ──
+                        tabContent
+                            .frame(maxHeight: .infinity)
+                    }
                 }
             }
             .navigationTitle("Edit Flyer")
@@ -212,12 +221,6 @@ struct ShareImageEditorView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                         .fontWeight(.semibold)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: shareImage) {
-                        Image(systemName: "square.and.arrow.up")
-                            .fontWeight(.semibold)
-                    }
                 }
             }
         }
@@ -241,7 +244,47 @@ struct ShareImageEditorView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            restoreSavedOptions()
             if cachedImage.size == .zero { regeneratePreview() }
+        }
+        .task {
+            await purchaseManager.loadProducts()
+            regeneratePreview()
+        }
+        .sheet(isPresented: $showRemoveWatermarkSheet) {
+            RemoveWatermarkSheet(purchaseManager: purchaseManager)
+                .presentationDetents([.height(300)])
+                .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog("Export", isPresented: $showExportOptions, titleVisibility: .visible) {
+            Button("Export with blur + watermark") {
+                shareImage(mode: .blurAndWatermark)
+            }
+            Button(purchaseManager.hasRemovedWatermark ? "Export as is" : "Export as is with clear HD") {
+                if purchaseManager.hasRemovedWatermark {
+                    shareImage(mode: .asIs)
+                } else {
+                    showRemoveWatermarkSheet = true
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .onChange(of: purchaseManager.hasRemovedWatermark) {
+            regeneratePreview()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
+            isScreenCaptured = UIScreen.main.isCaptured
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
+            guard !purchaseManager.hasRemovedWatermark else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showScreenshotMessage = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showScreenshotMessage = false
+                }
+            }
         }
     }
 
@@ -249,9 +292,9 @@ struct ShareImageEditorView: View {
     // MARK: - Canvas Preview
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private var canvasPreview: some View {
+    private func canvasPreview(availableHeight: CGFloat) -> some View {
         let aspect = options.sizePreset.size.width / options.sizePreset.size.height
-        let previewH: CGFloat = UIScreen.main.bounds.height * 0.36
+        let previewH = max(260, availableHeight * 0.6)
 
         return GeometryReader { geo in
             let availW = max(geo.size.width, 1)
@@ -264,6 +307,7 @@ struct ShareImageEditorView: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .blur(radius: purchaseManager.hasRemovedWatermark ? 0 : 0.25)
                     .shadow(color: .black.opacity(0.6), radius: 24, y: 12)
                     .opacity(isRendering ? 0.6 : 1.0)
                     .animation(.easeInOut(duration: 0.15), value: isRendering)
@@ -303,6 +347,17 @@ struct ShareImageEditorView: View {
                         }
                     )
                 }
+
+                if isScreenCaptured && !purchaseManager.hasRemovedWatermark {
+                    ScreenCaptureProtectionOverlay()
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+
+                if showScreenshotMessage {
+                    screenshotMessage
+                        .padding(.bottom, 12)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                }
             }
             .frame(width: fitW, height: fitH)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -315,55 +370,121 @@ struct ShareImageEditorView: View {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private var quickActionBar: some View {
-        HStack(spacing: 12) {
-            Menu {
-                ForEach(SocialSizePreset.allCases) { preset in
-                    Button {
-                        options.sizePreset = preset
-                        regeneratePreview()
-                    } label: {
-                        Label(preset.rawValue, systemImage: preset.icon)
-                    }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                formatMenu
+                if !purchaseManager.hasRemovedWatermark {
+                    removeWatermarkButton
                 }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: options.sizePreset.icon)
-                        .font(.system(size: 12, weight: .semibold))
-                    Text(options.sizePreset.rawValue)
-                        .font(.system(size: 12, weight: .semibold))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(Color.white.opacity(0.12), in: Capsule())
+                Spacer()
+                addTextButton
+                exportButton
             }
 
-            Spacer()
-
-            Button {
-                showAddTextSheet = true
-            } label: {
-                Image(systemName: "plus.square.on.square")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-            }
-
-            Button(action: shareImage) {
-                HStack(spacing: 5) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 13, weight: .bold))
-                    Text("Export")
-                        .font(.system(size: 13, weight: .bold))
+            VStack(alignment: .leading, spacing: 8) {
+                if !purchaseManager.hasRemovedWatermark {
+                    removeWatermarkButton
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(Color.accentColor, in: Capsule())
+                HStack(spacing: 12) {
+                    formatMenu
+                    Spacer()
+                    addTextButton
+                    exportButton
+                }
             }
-            .buttonStyle(ScaleButtonStyle())
         }
+    }
+
+    private var formatMenu: some View {
+        Menu {
+            ForEach(SocialSizePreset.allCases) { preset in
+                Button {
+                    options.sizePreset = preset
+                    regeneratePreview()
+                } label: {
+                    Label(preset.displayLabel, systemImage: preset.icon)
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: options.sizePreset.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(options.sizePreset.rawValue)
+                    .font(.system(size: 12, weight: .semibold))
+                    .minimumScaleFactor(0.82)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.white.opacity(0.12), in: Capsule())
+        }
+    }
+
+    private var removeWatermarkButton: some View {
+        Button {
+            showRemoveWatermarkSheet = true
+        } label: {
+            HStack(alignment: .top, spacing: 4) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10, weight: .semibold))
+                    .padding(.top, 1)
+                Text("Remove watermark\nClear HD export")
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(.white.opacity(0.62))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var addTextButton: some View {
+        Button {
+            showAddTextSheet = true
+        } label: {
+            Image(systemName: "plus.square.on.square")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.8))
+        }
+    }
+
+    private var exportButton: some View {
+        Button {
+            showExportOptions = true
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 13, weight: .bold))
+                Text("Export")
+                    .font(.system(size: 13, weight: .bold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(Color.accentColor, in: Capsule())
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    private enum ExportMode {
+        case asIs
+        case blurAndWatermark
+    }
+
+    private var screenshotMessage: some View {
+        Text("Remove the watermark for clean exports.")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.black.opacity(0.64), in: Capsule())
+            .allowsHitTesting(false)
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -752,7 +873,8 @@ struct ShareImageEditorView: View {
 
                             Text(overlay.text)
                                 .font(.system(size: 14, weight: .medium))
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.75)
                                 .foregroundStyle(.white)
 
                             Spacer()
@@ -1020,12 +1142,6 @@ struct ShareImageEditorView: View {
                 Task { await loadBGPhoto(from: newItem) }
             }
 
-            sectionLabel("PERFORMER PHOTO")
-            placeholderArea(icon: "person.crop.circle.badge.plus", text: "Coming soon – add your photo to flyers")
-
-            sectionLabel("VENUE / LOGO")
-            placeholderArea(icon: "building.2.crop.circle", text: "Coming soon – add venue logos")
-
             sectionLabel("TEXT OVERLAYS (\(overlays.count))")
 
             if overlays.isEmpty {
@@ -1040,7 +1156,8 @@ struct ShareImageEditorView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(overlay.text)
                                 .font(.system(size: 13, weight: .medium))
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.75)
                             Text("\(overlay.fontName) · \(overlay.fontWeight) · \(Int(overlay.fontSize * 100))%")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
@@ -1201,17 +1318,18 @@ struct ShareImageEditorView: View {
     }
 
     private func regeneratePreviewDebounced() {
-        debounceTask?.cancel()
-        debounceTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            guard !Task.isCancelled else { return }
+        debounceWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
             regeneratePreview()
         }
+        debounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
     }
 
     private func regeneratePreview() {
         renderTask?.cancel()
         isRendering = true
+        persistCurrentOptions()
 
         var opts = options
         opts.backgroundStyle = .custom
@@ -1223,10 +1341,13 @@ struct ShareImageEditorView: View {
         let upcomingShows = shows.filter { ($0.date ?? now) >= now }
         let snapshots = upcomingShows.map { ShowSnapshot(from: $0) }
         let name = normalizedPerformerName(performerName)
+        let showsWatermark = !purchaseManager.hasRemovedWatermark
 
         renderTask = Task { @MainActor in
             let img = await Task.detached(priority: .userInitiated) {
-                ShareImageGenerator.generate(snapshots: snapshots, performerName: name, options: opts)
+                ShareImageGenerator.generatePreview(snapshots: snapshots, performerName: name, options: opts,
+                                                    showsWatermark: showsWatermark,
+                                                    watermarkStyle: .subtlePreview)
             }.value
 
             guard !Task.isCancelled else { return }
@@ -1245,36 +1366,141 @@ struct ShareImageEditorView: View {
         return trimmed
     }
 
-    private func shareImage() {
+    private func shareImage(mode: ExportMode) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        let image = cachedImage
-        let vc = UIActivityViewController(activityItems: [image], applicationActivities: nil)
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let root = scene.windows.first?.rootViewController else { return }
-        var top = root
-        while let p = top.presentedViewController { top = p }
-        if let pop = vc.popoverPresentationController {
-            pop.sourceView = top.view
-            pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
-            pop.permittedArrowDirections = []
+        persistCurrentOptions()
+
+        if mode == .asIs, !purchaseManager.hasRemovedWatermark {
+            showRemoveWatermarkSheet = true
+            return
         }
-        top.present(vc, animated: true)
+
+        var opts = options
+        opts.backgroundStyle = .custom
+        opts.customBackground = buildCustomBG()
+        opts.textOverlays = overlays
+        opts.accentHex = colorHex(accentColor)
+
+        let now = Date()
+        let upcomingShows = shows.filter { ($0.date ?? now) >= now }
+        let snapshots = upcomingShows.map { ShowSnapshot(from: $0) }
+        let name = normalizedPerformerName(performerName)
+        let showsWatermark = mode == .blurAndWatermark
+
+        Task { @MainActor in
+            isRendering = true
+            let image = await Task.detached(priority: .userInitiated) {
+                let rendered = ShareImageGenerator.generate(snapshots: snapshots, performerName: name, options: opts,
+                                                            showsWatermark: showsWatermark)
+                return mode == .blurAndWatermark ? Self.blurredExportImage(rendered) : rendered
+            }.value
+            isRendering = false
+
+            let vc = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let root = scene.windows.first?.rootViewController else { return }
+            var top = root
+            while let p = top.presentedViewController { top = p }
+            if let pop = vc.popoverPresentationController {
+                pop.sourceView = top.view
+                pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
+                pop.permittedArrowDirections = []
+            }
+            top.present(vc, animated: true)
+        }
+    }
+
+    nonisolated private static func blurredExportImage(_ image: UIImage) -> UIImage {
+        guard let inputImage = CIImage(image: image) else { return image }
+        let filter = CIFilter(name: "CIGaussianBlur")
+        filter?.setValue(inputImage, forKey: kCIInputImageKey)
+        filter?.setValue(2.0, forKey: kCIInputRadiusKey)
+
+        guard let outputImage = filter?.outputImage?.cropped(to: inputImage.extent),
+              let cgImage = CIContext().createCGImage(outputImage, from: inputImage.extent) else {
+            return image
+        }
+
+        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
     }
 
     private func loadBGPhoto(from item: PhotosPickerItem?) async {
         guard let item else { return }
         if let data = try? await item.loadTransferable(type: Data.self) {
+            let processed = await Task.detached(priority: .userInitiated) {
+                downscaledBackgroundData(data)
+            }.value
             let thumb = await Task.detached(priority: .userInitiated) {
-                UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 300, height: 300))
+                UIImage(data: processed)?.preparingThumbnail(of: CGSize(width: 300, height: 300))
             }.value
             await MainActor.run {
-                bgPhotoData = data
+                bgPhotoData = processed
                 bgPhotoThumb = thumb
                 bgKind = .photo
                 regeneratePreview()
             }
         }
     }
+
+    private func restoreSavedOptions() {
+        if let saved = try? JSONDecoder().decode(ExportOptions.self, from: savedOptionsData) {
+            options = saved
+            bgKind = saved.customBackground.kind
+            solidColor = Color(hex: saved.customBackground.solidHex) ?? solidColor
+            gradFrom = Color(hex: saved.customBackground.gradientFromHex) ?? gradFrom
+            gradTo = Color(hex: saved.customBackground.gradientToHex) ?? gradTo
+            accentColor = Color(hex: saved.accentHex) ?? accentColor
+            overlays = saved.textOverlays
+            bgPhotoData = saved.customBackground.photoData
+            if let data = bgPhotoData {
+                bgPhotoThumb = UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 300, height: 300))
+            }
+            return
+        }
+
+        if let amber = Self.gradientPresets.first(where: { $0.label == "Amber" }) {
+            gradFrom = Color(hex: amber.from) ?? gradFrom
+            gradTo = Color(hex: amber.to) ?? gradTo
+            bgKind = .gradient
+            options.backgroundStyle = .custom
+        }
+    }
+
+    private func persistCurrentOptions() {
+        var saved = options
+        saved.backgroundStyle = .custom
+        saved.customBackground = buildCustomBG()
+        saved.customBackground.photoData = nil
+        if saved.customBackground.kind == .photo {
+            saved.customBackground.kind = .gradient
+        }
+        saved.textOverlays = overlays
+        saved.accentHex = colorHex(accentColor)
+
+        if let encoded = try? JSONEncoder().encode(saved) {
+            savedOptionsData = encoded
+        }
+    }
+}
+
+private func downscaledBackgroundData(_ data: Data, maxDimension: CGFloat = 2400) -> Data {
+    guard let image = UIImage(data: data) else { return data }
+    let maxSide = max(image.size.width, image.size.height)
+    guard maxSide > maxDimension else { return data }
+
+    let scale = maxDimension / maxSide
+    let targetSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.preferredRange = .standard
+
+    let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+    let resized = autoreleasepool {
+        renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+    return resized.jpegData(compressionQuality: 0.82) ?? data
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1844,6 +2070,134 @@ private struct OverlayEditorSheet: View {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MARK: - Remove Watermark
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+struct RemoveWatermarkSheet: View {
+    @ObservedObject var purchaseManager: PurchaseManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 12) {
+                Image(systemName: purchaseManager.hasRemovedWatermark ? "checkmark.seal.fill" : "drop.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(purchaseManager.hasRemovedWatermark ? Color.green : Color.accentColor)
+                    .frame(width: 44, height: 44)
+                    .background(Color(.secondarySystemGroupedBackground), in: Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(purchaseManager.hasRemovedWatermark ? "HD Exports Unlocked" : "Export in HD")
+                        .font(.system(size: 20, weight: .bold))
+                    Text("Remove the watermark and preview blur with a one-time purchase.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let message = purchaseManager.statusMessage {
+                Text(message)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                Task { await purchaseManager.purchaseRemoveWatermark() }
+            } label: {
+                HStack {
+                    if purchaseManager.isPurchasing || purchaseManager.isLoadingProducts {
+                        ProgressView()
+                    }
+
+                    Text(primaryButtonTitle)
+                        .font(.system(size: 16, weight: .bold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .foregroundStyle(.white)
+                .background(primaryButtonEnabled ? Color.accentColor : Color.gray, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(!primaryButtonEnabled)
+
+            Button {
+                Task { await purchaseManager.restorePurchases() }
+            } label: {
+                Text("Restore Purchases")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.plain)
+            .disabled(purchaseManager.isPurchasing)
+        }
+        .padding(22)
+        .task {
+            if purchaseManager.removeWatermarkProduct == nil {
+                await purchaseManager.loadProducts()
+            } else {
+                await purchaseManager.checkCurrentEntitlements()
+            }
+        }
+    }
+
+    private var primaryButtonTitle: String {
+        if purchaseManager.hasRemovedWatermark {
+            return "Purchased"
+        }
+
+        if purchaseManager.isLoadingProducts {
+            return "Loading..."
+        }
+
+        if purchaseManager.removeWatermarkProduct == nil {
+            return "Unavailable"
+        }
+
+        if let price = purchaseManager.removeWatermarkPriceText {
+            return "Remove Watermark \(price)"
+        }
+
+        return "Remove Watermark"
+    }
+
+    private var primaryButtonEnabled: Bool {
+        !purchaseManager.hasRemovedWatermark &&
+        !purchaseManager.isLoadingProducts &&
+        !purchaseManager.isPurchasing &&
+        purchaseManager.removeWatermarkProduct != nil
+    }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MARK: - Screen Capture Protection
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+private struct ScreenCaptureProtectionOverlay: View {
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(0.24)
+
+                VStack(spacing: 6) {
+                    Text("Preview protected")
+                        .font(.system(size: max(16, geo.size.width * 0.04), weight: .bold))
+                    Text("Remove watermark for clean exports")
+                        .font(.system(size: max(12, geo.size.width * 0.028), weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // MARK: - Button Style
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1862,10 +2216,3 @@ private struct ScaleButtonStyle: ButtonStyle {
         performerName: "Taylor Drew"
     )
 }
-
-
-
-
-
-
-

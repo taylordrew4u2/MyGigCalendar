@@ -118,16 +118,6 @@ final class ShareImageGeneratorTests: XCTestCase {
 
     // MARK: - ShowSnapshot
 
-    func testShowSnapshot_priceFormatted_free() {
-        let snap = makeSnapshot(price: 0)
-        XCTAssertEqual(snap.priceFormatted, "Free")
-    }
-
-    func testShowSnapshot_priceFormatted_withPrice() {
-        let snap = makeSnapshot(price: 25.00)
-        XCTAssertEqual(snap.priceFormatted, "$25.00")
-    }
-
     func testShowSnapshot_dateFormatted_containsSeparator() {
         let snap = makeSnapshot()
         XCTAssertTrue(snap.dateFormatted.contains("·"))
@@ -136,21 +126,6 @@ final class ShareImageGeneratorTests: XCTestCase {
     func testShowSnapshot_monthAbbrev_isUppercased() {
         let snap = makeSnapshot()
         XCTAssertEqual(snap.monthAbbrev, snap.monthAbbrev.uppercased())
-    }
-
-    func testShowSnapshot_hasTicketLink_true() {
-        let snap = makeSnapshot(ticketLink: "https://example.com")
-        XCTAssertTrue(snap.hasTicketLink)
-    }
-
-    func testShowSnapshot_hasTicketLink_false_whenEmpty() {
-        let snap = makeSnapshot(ticketLink: "")
-        XCTAssertFalse(snap.hasTicketLink)
-    }
-
-    func testShowSnapshot_hasTicketLink_withoutScheme_stillTrue() {
-        let snap = makeSnapshot(ticketLink: "example.com/tickets")
-        XCTAssertTrue(snap.hasTicketLink)
     }
 
     func testShowSnapshot_formattedDate_short() {
@@ -221,18 +196,12 @@ final class ShareImageGeneratorTests: XCTestCase {
     private func makeSnapshot(
         title: String = "Test Show",
         venue: String = "Test Venue",
-        date: Date = Date(),
-        price: Double = 0,
-        ticketLink: String = ""
+        date: Date = Date()
     ) -> ShowSnapshot {
         let show = Show(context: context)
         show.title = title
         show.venue = venue
         show.date = date
-        show.price = price
-        show.ticketLink = ticketLink
-        show.role = ""
-        show.notes = ""
         return ShowSnapshot(from: show)
     }
 }

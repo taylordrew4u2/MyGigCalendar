@@ -49,12 +49,16 @@ struct PersistenceController {
             }
         }
 
-        // Configure the store for CloudKit private database sync.
         if let description = container.persistentStoreDescriptions.first {
             description.setOption(true as NSNumber,
                                   forKey: NSPersistentHistoryTrackingKey)
             description.setOption(true as NSNumber,
                                   forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+
+            if !inMemory && FileManager.default.ubiquityIdentityToken == nil {
+                description.cloudKitContainerOptions = nil
+                print("iCloud unavailable — local-only mode")
+            }
         }
 
         container.loadPersistentStores { _, error in

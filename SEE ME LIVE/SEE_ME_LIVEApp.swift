@@ -17,6 +17,7 @@ struct SEE_ME_LIVEApp: App {
     private let _userID = UserIdentityService.shared.userID
 
     @State private var showSplash = true
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some Scene {
         WindowGroup {
@@ -29,8 +30,17 @@ struct SEE_ME_LIVEApp: App {
                     }
                     .transition(.opacity)
                 } else {
-                    HomeScreenView()
+                    if hasCompletedOnboarding {
+                        HomeScreenView()
+                            .transition(.opacity)
+                    } else {
+                        OnboardingWalkthroughView {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                hasCompletedOnboarding = true
+                            }
+                        }
                         .transition(.opacity)
+                    }
                 }
             }
             .environment(\.managedObjectContext,
@@ -38,11 +48,16 @@ struct SEE_ME_LIVEApp: App {
             .tint(Color.accentColor)
             .onReceive(NotificationCenter.default.publisher(
                 for: UIApplication.willEnterForegroundNotification)) { _ in
-                // Retry any pending public CloudKit operations when
-                // the app comes back to the foreground.
                 Task.detached {
                     let bgContext = persistenceController.container.newBackgroundContext()
-                    await PublicCloudSyncService.shared.flushQueue(using: bgContext)
+                    await PublicCloudSyncService.shared.startSyncIfAvailable(using: bgContext)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: .CKAccountChanged)) { _ in
+                Task.detached {
+                    let bgContext = persistenceController.container.newBackgroundContext()
+                    await PublicCloudSyncService.shared.startSyncIfAvailable(using: bgContext)
                 }
             }
         }

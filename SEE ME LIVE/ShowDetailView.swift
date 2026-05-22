@@ -14,90 +14,29 @@ struct ShowDetailView: View {
     @ObservedObject var show: Show
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var purchaseManager = PurchaseManager.shared
     @AppStorage("showDateTextSize") private var showDateTextSize: Double = 12
 
     let onEdit: () -> Void
 
     @State private var showDeleteConfirmation = false
-    @State private var showFullScreenImage = false
     @State private var appeared = false
-    @State private var headerUIImage: UIImage? = nil
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // MARK: Header Image
-                headerImage
-
                 VStack(alignment: .leading, spacing: 24) {
-                    // MARK: Title & Role
+                    // MARK: Title
                     VStack(alignment: .leading, spacing: 8) {
                         Text(show.titleOrEmpty)
                             .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(.primary)
                             .tracking(-0.3)
-
-                        if !show.roleOrEmpty.isEmpty {
-                            Text(show.roleOrEmpty)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(.secondary)
-                        }
                     }
                     .padding(.top, 24)
 
                     // MARK: Info Cards Grid
                     infoCardsGrid
-
-                    // MARK: Ticket Button
-                    if show.hasTicketLink, let url = show.normalizedTicketURL {
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            UIApplication.shared.open(url)
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "ticket.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text("Get Tickets")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Spacer()
-                                Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .opacity(0.7)
-                            }
-                            .foregroundStyle(Color("AppBackground"))
-                            .padding(.vertical, 14)
-                            .padding(.horizontal, 18)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.primary)
-                            )
-                        }
-                        .buttonStyle(DetailCardPress())
-                    }
-
-                    // MARK: Notes
-                    if !show.notesOrEmpty.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Notes", systemImage: "note.text")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                                .tracking(0.5)
-
-                            Text(show.notesOrEmpty)
-                                .font(.system(size: 16))
-                                .foregroundStyle(.primary)
-                                .lineSpacing(4)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(18)
-                        .background(Color("CardBackground"))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
-                        )
-                    }
 
                     // MARK: Action Buttons
                     VStack(spacing: 12) {
@@ -119,15 +58,7 @@ struct ShowDetailView: View {
                             .buttonStyle(DetailCardPress())
 
                             ShareLink(item: shareText) {
-                                Label("Share", systemImage: "square.and.arrow.up")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .foregroundStyle(.primary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 1)
-                                    )
+                                shareButtonLabel
                             }
                             .buttonStyle(DetailCardPress())
                         }
@@ -146,6 +77,7 @@ struct ShowDetailView: View {
                     .padding(.top, 4)
                 }
                 .padding(.horizontal, 20)
+                .padding(.top, 24)
                 .padding(.bottom, 40)
             }
             .opacity(appeared ? 1 : 0)
@@ -162,87 +94,26 @@ struct ShowDetailView: View {
         } message: {
             Text("This will remove the show from your calendar and public listing.")
         }
-        .fullScreenCover(isPresented: $showFullScreenImage) {
-            fullScreenImageViewer
-        }
         .onAppear {
-            if let data = show.flyerImageData {
-                Task.detached(priority: .userInitiated) {
-                    let uiImage = UIImage(data: data)
-                    await MainActor.run {
-                        self.headerUIImage = uiImage
-                    }
-                }
-            }
             withAnimation(.easeOut(duration: 0.4)) {
                 appeared = true
             }
         }
+        .task {
+            await purchaseManager.checkCurrentEntitlements()
+        }
     }
 
-    // MARK: - Header Image
-
-    @ViewBuilder
-    private var headerImage: some View {
-        if let uiImage = headerUIImage {
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                showFullScreenImage = true
-            } label: {
-                ZStack(alignment: .bottomTrailing) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 300)
-                        .clipped()
-                        .overlay(
-                            LinearGradient(
-                                colors: [.clear, .clear, Color("AppBackground").opacity(0.7)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-
-                    // Tap-to-expand hint
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("View Flyer")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(16)
-                }
-            }
-            .buttonStyle(DetailCardPress())
-        } else if show.flyerImageData != nil {
-            // Loading state or placeholder while decompressing
-            Color.gray.opacity(0.1)
-                .frame(height: 300)
-        } else {
-            // Subtle placeholder — don't waste vertical space
-            HStack(spacing: 10) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 20, weight: .light))
-                    .foregroundStyle(Color.accentColor.opacity(0.5))
-                Text("No flyer added")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.tertiary)
-            }
+    private var shareButtonLabel: some View {
+        Label("Share", systemImage: "square.and.arrow.up")
+            .font(.system(size: 14, weight: .semibold))
             .frame(maxWidth: .infinity)
-            .frame(height: 80)
-            .background(
-                LinearGradient(
-                    colors: [Color.accentColor.opacity(0.06), Color.clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+            .padding(.vertical, 12)
+            .foregroundStyle(.primary)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 1)
             )
-        }
     }
 
     // MARK: - Info Cards Grid
@@ -256,69 +127,6 @@ struct ShowDetailView: View {
                 InfoCard(icon: "mappin.and.ellipse", label: "Venue", value: show.venueOrEmpty)
             }
             InfoCard(icon: "calendar", label: "Date & Time", value: show.dateFormatted, valueFontSize: showDateTextSize)
-            InfoCard(icon: "tag.fill", label: "Price", value: show.priceFormatted)
-            if !show.roleOrEmpty.isEmpty {
-                InfoCard(icon: "person.fill", label: "Role", value: show.roleOrEmpty)
-            }
-        }
-    }
-
-    // MARK: - Full-Screen Image Viewer
-
-    private var fullScreenImageViewer: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            if let data = show.flyerImageData, let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFit()
-                    .ignoresSafeArea(edges: .horizontal)
-            }
-
-            VStack {
-                HStack {
-                    Text(show.titleOrEmpty)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
-                    Spacer()
-                    Button {
-                        showFullScreenImage = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 32, height: 32)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-
-                Spacer()
-
-                if let data = show.flyerImageData, let uiImage = UIImage(data: data) {
-                    HStack {
-                        Spacer()
-                        ShareLink(item: Image(uiImage: uiImage),
-                                  preview: SharePreview(show.titleOrEmpty, image: Image(uiImage: uiImage))) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 14, weight: .semibold))
-                                Text("Share Flyer")
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 13)
-                            .background(.ultraThinMaterial, in: Capsule())
-                        }
-                        Spacer()
-                    }
-                    .padding(.bottom, 40)
-                }
-            }
         }
     }
 
@@ -347,11 +155,8 @@ struct ShowDetailView: View {
             parts.append("📍 \(show.venueOrEmpty)")
         }
         parts.append("📅 \(show.dateFormatted)")
-        if show.price > 0 {
-            parts.append("🎟 \(show.priceFormatted)")
-        }
-        if show.hasTicketLink, let url = show.normalizedTicketURL {
-            parts.append("🔗 \(url.absoluteString)")
+        if !purchaseManager.hasRemovedWatermark {
+            parts.append("Created with My Gig Calendar")
         }
         return parts.joined(separator: "\n")
     }
@@ -423,11 +228,7 @@ private struct DetailCardPress: ButtonStyle {
                 let s = Show(context: ctx)
                 s.title = "Comedy Night"
                 s.venue = "The Laugh Factory"
-                s.role = "Headliner"
                 s.date = Date()
-                s.price = 25
-                s.ticketLink = "https://example.com"
-                s.notes = "Doors open at 7 PM. Bring your friends and get ready for an unforgettable evening of laughs!"
                 s.userID = "preview"
                 s.createdAt = Date()
                 s.updatedAt = Date()

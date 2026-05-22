@@ -38,18 +38,12 @@ final class ShowExtensionsTests: XCTestCase {
     // MARK: - Helper
 
     private func makeShow(
-        title: String? = nil, venue: String? = nil, role: String? = nil,
-        notes: String? = nil, ticketLink: String? = nil, date: Date? = nil,
-        price: Double = 0
+        title: String? = nil, venue: String? = nil, date: Date? = nil
     ) -> Show {
         let show = Show(context: context)
         show.title = title
         show.venue = venue
-        show.role = role
-        show.notes = notes
-        show.ticketLink = ticketLink
         show.date = date
-        show.price = price
         return show
     }
 
@@ -70,21 +64,6 @@ final class ShowExtensionsTests: XCTestCase {
         XCTAssertEqual(show.venueOrEmpty, "")
     }
 
-    func testRoleOrEmpty_whenNil_returnsEmpty() {
-        let show = makeShow()
-        XCTAssertEqual(show.roleOrEmpty, "")
-    }
-
-    func testNotesOrEmpty_whenNil_returnsEmpty() {
-        let show = makeShow()
-        XCTAssertEqual(show.notesOrEmpty, "")
-    }
-
-    func testTicketLinkOrEmpty_whenNil_returnsEmpty() {
-        let show = makeShow()
-        XCTAssertEqual(show.ticketLinkOrEmpty, "")
-    }
-
     func testDateOrNow_whenNil_returnsCurrentDate() {
         let show = makeShow()
         let now = Date()
@@ -95,23 +74,6 @@ final class ShowExtensionsTests: XCTestCase {
         let d = Date(timeIntervalSince1970: 1_000_000)
         let show = makeShow(date: d)
         XCTAssertEqual(show.dateOrNow, d)
-    }
-
-    // MARK: - Price Formatting
-
-    func testPriceFormatted_whenZero_returnsFree() {
-        let show = makeShow(price: 0)
-        XCTAssertEqual(show.priceFormatted, "Free")
-    }
-
-    func testPriceFormatted_whenPositive_returnsDollarAmount() {
-        let show = makeShow(price: 15.50)
-        XCTAssertEqual(show.priceFormatted, "$15.50")
-    }
-
-    func testPriceFormatted_whenNegative_returnsFree() {
-        let show = makeShow(price: -5)
-        XCTAssertEqual(show.priceFormatted, "Free")
     }
 
     // MARK: - Relative Date Label
@@ -149,48 +111,6 @@ final class ShowExtensionsTests: XCTestCase {
         let past = Calendar.current.date(byAdding: .day, value: -5, to: Date())!
         let show = makeShow(date: past)
         XCTAssertEqual(show.relativeDateLabel, "")
-    }
-
-    // MARK: - Ticket URL Normalization
-
-    func testNormalizedTicketURL_nil_returnsNil() {
-        let show = makeShow()
-        XCTAssertNil(show.normalizedTicketURL)
-    }
-
-    func testNormalizedTicketURL_empty_returnsNil() {
-        let show = makeShow(ticketLink: "")
-        XCTAssertNil(show.normalizedTicketURL)
-    }
-
-    func testNormalizedTicketURL_withHTTPS_returnsURL() {
-        let show = makeShow(ticketLink: "https://tickets.com/show")
-        XCTAssertEqual(show.normalizedTicketURL?.absoluteString, "https://tickets.com/show")
-    }
-
-    func testNormalizedTicketURL_withHTTP_returnsURL() {
-        let show = makeShow(ticketLink: "http://tickets.com/show")
-        XCTAssertEqual(show.normalizedTicketURL?.absoluteString, "http://tickets.com/show")
-    }
-
-    func testNormalizedTicketURL_withoutScheme_prependsHTTPS() {
-        let show = makeShow(ticketLink: "tickets.com/show")
-        XCTAssertEqual(show.normalizedTicketURL?.absoluteString, "https://tickets.com/show")
-    }
-
-    func testNormalizedTicketURL_withWhitespace_trims() {
-        let show = makeShow(ticketLink: "  https://tickets.com/show  ")
-        XCTAssertEqual(show.normalizedTicketURL?.absoluteString, "https://tickets.com/show")
-    }
-
-    func testHasTicketLink_true() {
-        let show = makeShow(ticketLink: "https://tickets.com")
-        XCTAssertTrue(show.hasTicketLink)
-    }
-
-    func testHasTicketLink_false() {
-        let show = makeShow()
-        XCTAssertFalse(show.hasTicketLink)
     }
 
     // MARK: - Date Formatting

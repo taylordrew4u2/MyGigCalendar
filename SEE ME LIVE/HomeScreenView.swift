@@ -39,6 +39,7 @@ struct HomeScreenView: View {
     @State private var showToast = false
     @State private var isPresentingDateSizeSheet = false
     @State private var isPresentingShareSheet = false
+    @State private var isPresentingSettingsFAQ = false
     @State private var calendarMonth: Date = Date()
     @State private var selectedCalendarDate: Date?
     @State private var searchText = ""
@@ -62,9 +63,7 @@ struct HomeScreenView: View {
     private func matchesSearch(_ show: Show) -> Bool {
         let q = searchText.lowercased()
         return show.titleOrEmpty.lowercased().contains(q) ||
-               show.venueOrEmpty.lowercased().contains(q) ||
-               show.roleOrEmpty.lowercased().contains(q) ||
-               show.notesOrEmpty.lowercased().contains(q)
+               show.venueOrEmpty.lowercased().contains(q)
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -84,6 +83,11 @@ struct HomeScreenView: View {
 
                         calendarCard
                             .padding(.horizontal, 20)
+
+                        if !allShows.isEmpty {
+                            createFlyerBlock
+                                .padding(.horizontal, 20)
+                        }
 
                         if !allShows.isEmpty {
                             searchField
@@ -115,6 +119,10 @@ struct HomeScreenView: View {
                             searchEmptyState
                                 .padding(.horizontal, 20)
                         }
+
+                        settingsFAQButton
+                            .padding(.horizontal, 20)
+                            .padding(.top, 2)
 
                         Color.clear.frame(height: 40)
                     }
@@ -152,6 +160,9 @@ struct HomeScreenView: View {
             .sheet(isPresented: $isPresentingDateSizeSheet) {
                 DateTextSizeSheet(showDateTextSize: $showDateTextSize)
             }
+            .sheet(isPresented: $isPresentingSettingsFAQ) {
+                SettingsFAQView()
+            }
             .task { await performBackgroundSync() }
             .refreshable {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -168,10 +179,23 @@ struct HomeScreenView: View {
     @ToolbarContentBuilder
     private var topToolbar: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
-            Text("SEE ME LIVE")
-                .font(.system(size: 12, weight: .heavy))
-                .tracking(2)
-                .foregroundStyle(.primary)
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    calendarMonth = Date()
+                    selectedCalendarDate = nil
+                    searchText = ""
+                    showPastShows = false
+                }
+            } label: {
+                Image(systemName: "house.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.92, green: 0.14, blue: 0.16))
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Home")
         }
         ToolbarItem(placement: .navigationBarTrailing) {
             Menu {
@@ -382,6 +406,54 @@ struct HomeScreenView: View {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Create Flyer CTA
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private var createFlyerBlock: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            isPresentingShareSheet = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(red: 0.92, green: 0.14, blue: 0.16))
+                    Image(systemName: "doc.richtext")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 48, height: 48)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Create Flyer")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text("Turn your upcoming dates into a shareable post.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color("CardBackground"))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.12), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(RowPress())
+        .accessibilityLabel("Create Flyer")
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Selected Day Section
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -587,6 +659,30 @@ struct HomeScreenView: View {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Settings / FAQ
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private var settingsFAQButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            isPresentingSettingsFAQ = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Settings / FAQ")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Settings and FAQ")
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Toast
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -785,14 +881,16 @@ private struct ShowRow: View {
                 Text(show.titleOrEmpty)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
 
                 HStack(spacing: 8) {
                     if !show.venueOrEmpty.isEmpty {
                         Text(show.venueOrEmpty)
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.82)
                         Text("·")
                             .font(.system(size: 11))
                             .foregroundStyle(.tertiary)
@@ -827,6 +925,67 @@ private struct ShowRow: View {
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "h:mm a"; return f
     }()
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MARK: - Settings / FAQ Sheet
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+private struct SettingsFAQView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    faqItem(
+                        "How do I add a gig?",
+                        "Tap Add show on the home screen, enter the title, venue, and date, then save."
+                    )
+                    faqItem(
+                        "How do I make a flyer?",
+                        "Add at least one show, then tap Create Flyer. You can change the format, colors, layout, and text before exporting."
+                    )
+                    faqItem(
+                        "Why is there a watermark?",
+                        "Free exports include My Gig Calendar branding. Use Remove Watermark to unlock clean HD exports."
+                    )
+                    faqItem(
+                        "How do I restore my purchase?",
+                        "Open the flyer editor, tap Remove watermark, then tap Restore Purchases."
+                    )
+                    faqItem(
+                        "Do shows sync to my calendar?",
+                        "When calendar access is enabled, saved gigs can be added to your device calendar."
+                    )
+                }
+                .padding(20)
+            }
+            .background(Color("AppBackground").ignoresSafeArea())
+            .navigationTitle("Settings / FAQ")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+
+    private func faqItem(_ question: String, _ answer: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(question)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary)
+            Text(answer)
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 2)
+    }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

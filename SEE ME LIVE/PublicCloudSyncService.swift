@@ -28,6 +28,24 @@ final class PublicCloudSyncService: Sendable {
 
     private init() {}
 
+    // MARK: - Account Check
+
+    private func isCloudKitAvailable() async -> Bool {
+        do {
+            return try await CKContainer.default().accountStatus() == .available
+        } catch {
+            return false
+        }
+    }
+
+    func startSyncIfAvailable(using context: NSManagedObjectContext) async {
+        guard await isCloudKitAvailable() else {
+            print("iCloud unavailable — skipping public sync")
+            return
+        }
+        await flushQueue(using: context)
+    }
+
     // MARK: - Pending Delete Storage (MainActor-isolated)
     
     /// Read pending delete IDs from UserDefaults on the main actor.
@@ -46,18 +64,22 @@ final class PublicCloudSyncService: Sendable {
 
     /// Saves or updates a PublicShow record for the given Core Data Show object ID.
     func saveOrUpdate(objectID: NSManagedObjectID, in context: NSManagedObjectContext) async {
-        // Snapshot all Show properties inside context.perform to avoid
-        // unsafeForcedSync from an async context.
+        guard await isCloudKitAvailable() else {
+            await context.perform {
+                if let s = try? context.existingObject(with: objectID) as? Show {
+                    s.needsPublicSync = true
+                    s.lastPublicSyncError = "iCloud account unavailable"
+                    PersistenceController.shared.save(context: context)
+                }
+            }
+            return
+        }
+
         struct ShowSnapshot {
             let title: String
-            let role: String
             let venue: String
             let date: Date
-            let price: Double
-            let ticketLink: String
-            let notes: String
             let userID: String
-            let flyerImageData: Data?
             let publicRecordID: String?
         }
 
@@ -65,14 +87,9 @@ final class PublicCloudSyncService: Sendable {
             guard let s = try? context.existingObject(with: objectID) as? Show else { return nil }
             return ShowSnapshot(
                 title: s.title ?? "",
-                role: s.role ?? "",
                 venue: s.venue ?? "",
                 date: s.date ?? Date(),
-                price: s.price,
-                ticketLink: s.ticketLink ?? "",
-                notes: s.notes ?? "",
                 userID: s.userID ?? "",
-                flyerImageData: s.flyerImageData,
                 publicRecordID: s.publicRecordID
             )
         }) else { return }
@@ -92,22 +109,14 @@ final class PublicCloudSyncService: Sendable {
 
         // Populate fields from snapshot (no managed-object access).
         record["title"]      = snapshot.title as CKRecordValue
-        record["role"]       = snapshot.role as CKRecordValue
         record["venue"]      = snapshot.venue as CKRecordValue
         record["date"]       = snapshot.date as CKRecordValue
-        record["price"]      = NSNumber(value: snapshot.price)
-        record["ticketLink"] = snapshot.ticketLink as CKRecordValue
-        record["notes"]      = snapshot.notes as CKRecordValue
         record["userID"]     = snapshot.userID as CKRecordValue
-
-        if let imageData = snapshot.flyerImageData {
-            let tempURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString + ".jpg")
-            try? imageData.write(to: tempURL)
-            record["flyer"] = CKAsset(fileURL: tempURL)
-        } else {
-            record["flyer"] = nil
-        }
+        record["role"]       = nil
+        record["price"]      = nil
+        record["ticketLink"] = nil
+        record["notes"]      = nil
+        record["flyer"]      = nil
 
         do {
             let saved = try await publicDB.save(record)
@@ -154,6 +163,8 @@ final class PublicCloudSyncService: Sendable {
 
     /// Flushes any pending saves or deletes that failed while offline.
     func flushQueue(using context: NSManagedObjectContext) async {
+        guard await isCloudKitAvailable() else { return }
+
         // 1. Retry pending saves — fetch objectIDs inside context.perform
         //    to avoid accessing managed objects outside their queue.
         let pendingIDs: [NSManagedObjectID] = await context.perform {

@@ -69,7 +69,7 @@ final class HTMLExportServiceTests: XCTestCase {
     func testGenerateHTML_emptyShows_containsEmptyState() {
         let html = HTMLExportService.generateHTML(shows: [], performerName: "")
         XCTAssertTrue(html.contains("No Shows Yet"))
-        XCTAssertTrue(html.contains("SEE ME LIVE"))
+        XCTAssertTrue(html.contains("My Gig Calendar"))
     }
 
     func testGenerateHTML_withShows_containsShowTitle() {
@@ -128,9 +128,9 @@ final class HTMLExportServiceTests: XCTestCase {
         XCTAssertTrue(html.contains("#FAFAFA"), "Minimal theme should use light background")
     }
 
-    // MARK: - Show with Ticket Link
+    // MARK: - Hidden Legacy Fields
 
-    func testGenerateHTML_withTicketLink_containsButton() {
+    func testGenerateHTML_withTicketLink_hidesTicketButton() {
         let show = Show(context: context)
         show.title = "Show"
         show.venue = "Venue"
@@ -138,13 +138,11 @@ final class HTMLExportServiceTests: XCTestCase {
         show.ticketLink = "https://tickets.example.com"
 
         let html = HTMLExportService.generateHTML(shows: [show], performerName: "")
-        XCTAssertTrue(html.contains("Get Tickets"))
-        XCTAssertTrue(html.contains("https://tickets.example.com"))
+        XCTAssertFalse(html.contains("Get Tickets"))
+        XCTAssertFalse(html.contains("https://tickets.example.com"))
     }
 
-    // MARK: - Show with Price
-
-    func testGenerateHTML_withPrice_displaysPrice() {
+    func testGenerateHTML_withPrice_hidesPrice() {
         let show = Show(context: context)
         show.title = "Paid Show"
         show.venue = "Club"
@@ -152,7 +150,7 @@ final class HTMLExportServiceTests: XCTestCase {
         show.price = 20.0
 
         let html = HTMLExportService.generateHTML(shows: [show], performerName: "")
-        XCTAssertTrue(html.contains("$20.00"))
+        XCTAssertFalse(html.contains("$20.00"))
     }
 
     // MARK: - Past Shows Filter

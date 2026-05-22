@@ -12,15 +12,19 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+	<key>CFBundleShortVersionString</key>
+	<string>3</string>
+	<key>CFBundleVersion</key>
+	<string>5</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>SEE ME LIVE needs access to your calendar to add your upcoming shows as events.</string>
+	<string>My Gig Calendar needs access to your calendar to add your upcoming shows as events.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>SEE ME LIVE uses the camera to take photos of show flyers and posters.</string>
+	<string>My Gig Calendar uses the camera to take photos of show flyers and posters.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>SEE ME LIVE needs photo library access to select flyer images for your shows.</string>
+	<string>My Gig Calendar needs photo library access to select flyer images for your shows.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>SEE ME LIVE needs permission to save generated flyers to your photo library.</string>
+	<string>My Gig Calendar needs permission to save generated flyers to your photo library.</string>
 </dict>
 </plist>

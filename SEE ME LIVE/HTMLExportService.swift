@@ -54,7 +54,8 @@ struct CalendarDisplayOptions: Codable, Equatable {
 enum HTMLExportService {
 
     /// Generates HTML with full CalendarDisplayOptions support.
-    static func generateHTML(shows: [Show], options: CalendarDisplayOptions = CalendarDisplayOptions()) -> String {
+    static func generateHTML(shows: [Show], options: CalendarDisplayOptions = CalendarDisplayOptions(),
+                             showsWatermark: Bool = true) -> String {
         let filtered = options.showPastShows
             ? shows.sorted { $0.dateOrNow < $1.dateOrNow }
             : shows.filter { $0.dateOrNow >= Date() }.sorted { $0.dateOrNow < $1.dateOrNow }
@@ -107,6 +108,9 @@ enum HTMLExportService {
         let detailListHTML = filtered.isEmpty ? emptyStateHTML : buildDetailList(shows: filtered, options: options)
 
         let appIconSVG = buildAppIconSVG(accent: accent)
+        let watermarkHTML = showsWatermark
+            ? "<p class=\"watermark\">Created with My Gig Calendar</p>"
+            : ""
 
         return """
         <!DOCTYPE html>
@@ -114,7 +118,7 @@ enum HTMLExportService {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>SEE ME LIVE – \(titleText)</title>
+            <title>My Gig Calendar - \(titleText)</title>
             <style>
         \(css)
             </style>
@@ -123,7 +127,7 @@ enum HTMLExportService {
             <div class="container">
                 <header>
                     <div class="app-icon">\(appIconSVG)</div>
-                    <h1>SEE ME LIVE</h1>
+                    <h1>My Gig Calendar</h1>
                     <p class="sub">\(titleText)</p>
                     <p class="gen">Updated \(generatedDate)</p>
                 </header>
@@ -137,7 +141,7 @@ enum HTMLExportService {
                 </main>
 
                 <footer>
-                    <p>Powered by <span class="brand">SEE ME LIVE</span></p>
+                    \(watermarkHTML)
                 </footer>
             </div>
         </body>
@@ -154,7 +158,7 @@ enum HTMLExportService {
 
     /// Saves HTML to a temporary file and returns the URL
     static func saveHTMLToFile(html: String) -> URL? {
-        let fileName = "SEE_ME_LIVE_\(Date().timeIntervalSince1970).html"
+        let fileName = "My_Gig_Calendar_\(Date().timeIntervalSince1970).html"
         let tempDir  = FileManager.default.temporaryDirectory
         let fileURL  = tempDir.appendingPathComponent(fileName)
         do {
@@ -203,6 +207,14 @@ enum HTMLExportService {
             min-height: 100vh;
         }
         .container { max-width: 780px; margin: 0 auto; }
+        .watermark {
+            text-align: center;
+            color: \(subText);
+            font-size: 0.82rem;
+            font-weight: 600;
+            opacity: 0.78;
+            padding: 18px 0 6px;
+        }
 
         /* ── Header ── */
         header {
@@ -402,31 +414,7 @@ enum HTMLExportService {
             letter-spacing: 0.04em;
         }
         .urgent-chip { background: \(accent); color: #fff; }
-        .price-chip  { background: \(accent)22; color: \(accent); border: 1px solid \(accent)44; }
-        .role-chip   { background: \(accent)14; color: \(subText); border: 1px solid \(border); }
         .past-chip   { background: #88888833; color: #888; }
-        .detail-notes {
-            background: \(accent)10;
-            padding: 10px 12px;
-            border-radius: 8px;
-            border-left: 3px solid \(accent);
-            font-size: 0.87rem;
-            font-style: italic;
-            color: \(subText);
-            margin-bottom: 8px;
-        }
-        .ticket-btn {
-            display: inline-block;
-            background: \(accent);
-            color: #fff;
-            padding: 8px 18px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.88rem;
-            box-shadow: 0 2px 8px \(accent)44;
-        }
-        .ticket-btn:hover { opacity: 0.88; }
 
         /* ── Empty state ── */
         .empty-state {
@@ -627,14 +615,8 @@ enum HTMLExportService {
         df.dateFormat = "EEEE, MMMM d · h:mm a"
         let formattedDate = df.string(from: show.dateOrNow)
 
-        let pricePart = show.price > 0 ? "<span class=\"detail-chip price-chip\">\(show.priceFormatted)</span>" : ""
-        let rolePart  = !show.roleOrEmpty.isEmpty ? "<span class=\"detail-chip role-chip\">\(show.roleOrEmpty)</span>" : ""
         let pastBadge = isPast ? "<span class=\"detail-chip past-chip\">Past</span>" : ""
         let urgBadge  = !isPast && !show.relativeDateLabel.isEmpty ? "<span class=\"detail-chip urgent-chip\">\(show.relativeDateLabel)</span>" : ""
-
-        let ticketBtn = show.hasTicketLink ? "<a href=\"\(show.ticketLinkOrEmpty)\" class=\"ticket-btn\" target=\"_blank\" rel=\"noopener\">🎟 Get Tickets</a>" : ""
-
-        let notesHTML = !show.notesOrEmpty.isEmpty ? "<div class=\"detail-notes\">\(show.notesOrEmpty.replacingOccurrences(of: "\n", with: "<br>"))</div>" : ""
 
         return """
         <div class="detail-card\(isPast ? " detail-past" : "")">
@@ -646,8 +628,7 @@ enum HTMLExportService {
                 <div class="detail-title">\(show.titleOrEmpty)</div>
                 <div class="detail-venue">📍 \(show.venueOrEmpty)</div>
                 <div class="detail-datetime">🗓 \(formattedDate)</div>
-                <div class="detail-chips">\(urgBadge)\(pricePart)\(rolePart)\(pastBadge)</div>
-                \(notesHTML)\(ticketBtn)
+                <div class="detail-chips">\(urgBadge)\(pastBadge)</div>
             </div>
         </div>
         """

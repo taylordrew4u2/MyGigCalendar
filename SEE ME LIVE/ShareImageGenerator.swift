@@ -9,7 +9,7 @@ import UIKit
 
 // MARK: - Social Size Preset
 
-enum SocialSizePreset: String, CaseIterable, Identifiable {
+enum SocialSizePreset: String, CaseIterable, Identifiable, Codable {
     case instagramStory = "IG Story"
     case instagramPost  = "IG Post"
     case tiktok         = "TikTok"
@@ -18,6 +18,17 @@ enum SocialSizePreset: String, CaseIterable, Identifiable {
     case ogCard         = "Link Preview"
 
     var id: String { rawValue }
+
+    var displayLabel: String {
+        switch self {
+        case .instagramStory: return "IG Story (9:16)"
+        case .instagramPost:  return "IG Post (1:1)"
+        case .tiktok:         return "TikTok (9:16)"
+        case .twitter:        return "X / Twitter (16:9)"
+        case .facebook:       return "Facebook (1.91:1)"
+        case .ogCard:         return "Link Preview (1.91:1)"
+        }
+    }
 
     var size: CGSize {
         switch self {
@@ -44,7 +55,7 @@ enum SocialSizePreset: String, CaseIterable, Identifiable {
 
 // MARK: - Background Style
 
-enum BackgroundStyle: String, CaseIterable, Identifiable {
+enum BackgroundStyle: String, CaseIterable, Identifiable, Codable {
     case gradient = "Gradient"
     case dark     = "Dark"
     case light    = "Light"
@@ -62,8 +73,8 @@ enum BackgroundStyle: String, CaseIterable, Identifiable {
 
 // MARK: - Custom Background Descriptor
 
-struct CustomBackground {
-    enum Kind { case solidColor, gradient, photo }
+struct CustomBackground: Codable {
+    enum Kind: Codable { case solidColor, gradient, photo }
     var kind: Kind = .solidColor
     var solidHex: String = "#1A0A00"
     var gradientFromHex: String = "#1A0A00"
@@ -73,8 +84,8 @@ struct CustomBackground {
 
 // MARK: - Text Overlay Descriptor
 
-struct TextOverlay: Identifiable {
-    let id = UUID()
+struct TextOverlay: Identifiable, Codable {
+    let id: UUID
     var text: String
     var fontName: String = "System"
     var fontSize: CGFloat = 0.08
@@ -89,7 +100,39 @@ struct TextOverlay: Identifiable {
     var outlineColorHex: String = "#000000"
     var alignment: TextAlignment = .center
     
-    enum TextAlignment: String, CaseIterable {
+    init(
+        id: UUID = UUID(),
+        text: String,
+        fontName: String = "System",
+        fontSize: CGFloat = 0.08,
+        fontWeight: String = "bold",
+        colorHex: String = "#FFFFFF",
+        positionX: CGFloat = 0.5,
+        positionY: CGFloat = 0.10,
+        rotation: Double = 0,
+        shadowEnabled: Bool = true,
+        shadowOpacity: Double = 0.5,
+        outlineEnabled: Bool = false,
+        outlineColorHex: String = "#000000",
+        alignment: TextAlignment = .center
+    ) {
+        self.id = id
+        self.text = text
+        self.fontName = fontName
+        self.fontSize = fontSize
+        self.fontWeight = fontWeight
+        self.colorHex = colorHex
+        self.positionX = positionX
+        self.positionY = positionY
+        self.rotation = rotation
+        self.shadowEnabled = shadowEnabled
+        self.shadowOpacity = shadowOpacity
+        self.outlineEnabled = outlineEnabled
+        self.outlineColorHex = outlineColorHex
+        self.alignment = alignment
+    }
+
+    enum TextAlignment: String, CaseIterable, Codable {
         case left = "Left"
         case center = "Center"
         case right = "Right"
@@ -98,7 +141,7 @@ struct TextOverlay: Identifiable {
 
 // MARK: - Card Style
 
-enum CardStyle: String, CaseIterable, Identifiable {
+enum CardStyle: String, CaseIterable, Identifiable, Codable {
     case rounded  = "Rounded"
     case sharp    = "Sharp"
     case minimal  = "Minimal"
@@ -116,7 +159,7 @@ enum CardStyle: String, CaseIterable, Identifiable {
 
 // MARK: - Header Style
 
-enum HeaderStyle: String, CaseIterable, Identifiable {
+enum HeaderStyle: String, CaseIterable, Identifiable, Codable {
     case left     = "Left"
     case centered = "Centered"
     case minimal  = "Minimal"
@@ -132,7 +175,7 @@ enum HeaderStyle: String, CaseIterable, Identifiable {
 
 // MARK: - Font Style
 
-enum FontStyle: String, CaseIterable, Identifiable {
+enum FontStyle: String, CaseIterable, Identifiable, Codable {
     case system  = "Default"
     case rounded = "Rounded"
     case serif   = "Serif"
@@ -150,7 +193,7 @@ enum FontStyle: String, CaseIterable, Identifiable {
 
 // MARK: - Date Format Style
 
-enum DateFormatStyle: String, CaseIterable, Identifiable {
+enum DateFormatStyle: String, CaseIterable, Identifiable, Codable {
     case short    = "Short"      // Mar 15 · 8 PM
     case full     = "Full"       // Saturday, March 15
     case relative = "Relative"   // In 3 days
@@ -168,7 +211,7 @@ enum DateFormatStyle: String, CaseIterable, Identifiable {
 
 // MARK: - Layout Template
 
-enum LayoutTemplate: String, CaseIterable, Identifiable {
+enum LayoutTemplate: String, CaseIterable, Identifiable, Codable {
     case classic    = "Classic"      // Date badge left, text right
     case minimal    = "Minimal"      // Simple text list, no badges
     case bold       = "Bold"         // Large date on top, text below
@@ -200,7 +243,7 @@ enum LayoutTemplate: String, CaseIterable, Identifiable {
 
 // MARK: - Export Options
 
-struct ExportOptions {
+struct ExportOptions: Codable {
     var sizePreset:      SocialSizePreset = .instagramPost
     var backgroundStyle: BackgroundStyle  = .gradient
     var accentHex:       String           = "#CC7057"
@@ -251,23 +294,12 @@ struct ExportOptions {
 
 struct ShowSnapshot: Sendable {
     let title: String
-    let role: String
     let venue: String
     let date: Date
-    let price: Double
-    let ticketLink: String
-    let notes: String
-    let flyerImageData: Data?
 
     var titleOrEmpty: String   { title }
     var venueOrEmpty: String   { venue }
-    var roleOrEmpty: String    { role }
-    var notesOrEmpty: String   { notes }
     var dateOrNow: Date        { date }
-
-    var priceFormatted: String {
-        price > 0 ? String(format: "$%.2f", price) : "Free"
-    }
 
     var dateFormatted: String {
         "\(Self.dayFormatter.string(from: date)) · \(Self.timeFormatter.string(from: date))"
@@ -318,44 +350,67 @@ struct ShowSnapshot: Sendable {
         let f = DateFormatter(); f.dateFormat = "EEEE, MMMM d"; return f
     }()
 
-    var hasTicketLink: Bool {
-        guard !ticketLink.isEmpty else { return false }
-        let trimmed = ticketLink.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
-            return URL(string: trimmed) != nil
-        }
-        return URL(string: "https://" + trimmed) != nil
-    }
-
     init(from show: Show) {
         self.title = show.title ?? ""
-        self.role = show.role ?? ""
         self.venue = show.venue ?? ""
         self.date = show.date ?? Date()
-        self.price = show.price
-        self.ticketLink = show.ticketLink ?? ""
-        self.notes = show.notes ?? ""
-        self.flyerImageData = show.flyerImageData
     }
 }
 
 // MARK: - Share Image Generator
 
 enum ShareImageGenerator {
+    private static let appWatermarkText = "Created with My Gig Calendar"
+
+    enum WatermarkStyle {
+        case subtlePreview
+        case export
+    }
 
     /// Generate from Core Data Show objects (snapshots them on the calling thread).
-    static func generate(shows: [Show], performerName: String, options: ExportOptions) -> UIImage {
+    static func generate(shows: [Show], performerName: String, options: ExportOptions,
+                         showsWatermark: Bool = true, watermarkStyle: WatermarkStyle = .export) -> UIImage {
         let snapshots = shows.map { ShowSnapshot(from: $0) }
-        return generate(snapshots: snapshots, performerName: performerName, options: options)
+        return generate(snapshots: snapshots, performerName: performerName, options: options,
+                        showsWatermark: showsWatermark, watermarkStyle: watermarkStyle)
     }
 
     /// Generate from thread-safe ShowSnapshot values. Safe to call from any thread.
-    static func generate(snapshots: [ShowSnapshot], performerName: String, options: ExportOptions) -> UIImage {
+    static func generate(snapshots: [ShowSnapshot], performerName: String, options: ExportOptions,
+                         showsWatermark: Bool = true, watermarkStyle: WatermarkStyle = .export) -> UIImage {
         let size = options.sizePreset.size
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { ctx in
-            drawCanvas(in: ctx.cgContext, size: size, snapshots: snapshots,
-                       performerName: performerName, options: options)
+        return render(snapshots: snapshots, performerName: performerName, options: options, size: size,
+                      showsWatermark: showsWatermark, watermarkStyle: watermarkStyle)
+    }
+
+    /// Generate a lower-memory preview while preserving the selected export aspect ratio.
+    static func generatePreview(snapshots: [ShowSnapshot], performerName: String, options: ExportOptions,
+                                maxPixelDimension: CGFloat = 720, showsWatermark: Bool = true,
+                                watermarkStyle: WatermarkStyle = .subtlePreview) -> UIImage {
+        let exportSize = options.sizePreset.size
+        let largestSide = max(exportSize.width, exportSize.height)
+        let scale = min(1, maxPixelDimension / largestSide)
+        let previewSize = CGSize(width: max(1, exportSize.width * scale),
+                                 height: max(1, exportSize.height * scale))
+        return render(snapshots: snapshots, performerName: performerName, options: options, size: previewSize,
+                      showsWatermark: showsWatermark, watermarkStyle: watermarkStyle)
+    }
+
+    private static func render(snapshots: [ShowSnapshot], performerName: String, options: ExportOptions,
+                               size: CGSize, showsWatermark: Bool, watermarkStyle: WatermarkStyle) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.preferredRange = .standard
+
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return autoreleasepool {
+            renderer.image { ctx in
+                drawCanvas(in: ctx.cgContext, size: size, snapshots: snapshots,
+                           performerName: performerName, options: options)
+                if showsWatermark {
+                    drawWatermark(in: ctx.cgContext, size: size, options: options, style: watermarkStyle)
+                }
+            }
         }
     }
 
@@ -1103,6 +1158,151 @@ enum ShareImageGenerator {
             UIGraphicsPopContext()
             ctx.restoreGState()
         }
+    }
+
+    // MARK: - Watermark
+
+    private static func drawWatermark(in ctx: CGContext, size: CGSize, options: ExportOptions, style: WatermarkStyle) {
+        switch style {
+        case .subtlePreview:
+            drawSubtlePreviewWatermark(in: ctx, size: size, options: options)
+        case .export:
+            drawExportWatermark(in: ctx, size: size, options: options)
+        }
+    }
+
+    private static func drawSubtlePreviewWatermark(in ctx: CGContext, size: CGSize, options: ExportOptions) {
+        let text = appWatermarkText
+        let fontSize = max(9, min(size.width, size.height) * 0.022)
+        let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor.white.withAlphaComponent(0.72)
+        ]
+        let textSize = (text as NSString).size(withAttributes: attributes)
+        let horizontalPadding = fontSize * 0.7
+        let verticalPadding = fontSize * 0.38
+        let margin = max(10, min(size.width, size.height) * 0.024)
+        let watermarkSize = CGSize(
+            width: textSize.width + horizontalPadding * 2,
+            height: textSize.height + verticalPadding * 2
+        )
+
+        let rect = CGRect(x: size.width - watermarkSize.width - margin,
+                          y: size.height - watermarkSize.height - margin,
+                          width: watermarkSize.width,
+                          height: watermarkSize.height)
+
+        ctx.saveGState()
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2)
+        ctx.setShadow(offset: CGSize(width: 0, height: 1), blur: fontSize * 0.25,
+                      color: UIColor.black.withAlphaComponent(0.25).cgColor)
+        ctx.setFillColor(UIColor.black.withAlphaComponent(0.28).cgColor)
+        ctx.addPath(path.cgPath)
+        ctx.fillPath()
+
+        UIGraphicsPushContext(ctx)
+        (text as NSString).draw(
+            at: CGPoint(x: rect.minX + horizontalPadding, y: rect.minY + verticalPadding),
+            withAttributes: attributes
+        )
+        UIGraphicsPopContext()
+        ctx.restoreGState()
+    }
+
+    private static func estimatedImportantRects(size: CGSize, options: ExportOptions) -> [CGRect] {
+        let pad = size.width * 0.05
+        let headerH: CGFloat = options.showHeader ? (options.headerStyle == .minimal ? size.width * 0.10 : size.width * 0.14) : 0
+        let baseGridTop = pad + headerH
+        let baseGridBottom = size.height - pad * 0.5
+        let baseGridH = baseGridBottom - baseGridTop
+        let baseGridW = size.width - pad * 2
+
+        let scale = CGFloat(options.listScale)
+        let gridW = baseGridW * scale
+        let gridH = baseGridH * scale
+        let gridCenterX = pad + baseGridW * 0.5 + CGFloat(options.listOffsetX) * size.width
+        let gridCenterY = baseGridTop + baseGridH * 0.5 + CGFloat(options.listOffsetY) * size.height
+        var rects = [
+            CGRect(x: gridCenterX - gridW * 0.5,
+                   y: gridCenterY - gridH * 0.5,
+                   width: gridW,
+                   height: gridH).insetBy(dx: -pad * 0.2, dy: -pad * 0.2)
+        ]
+
+        if options.showHeader {
+            rects.append(CGRect(x: 0, y: 0, width: size.width, height: baseGridTop + pad * 0.35))
+        }
+
+        for overlay in options.textOverlays where !overlay.text.isEmpty {
+            let overlayFontSize = overlay.fontSize * size.width
+            let estimatedWidth = min(size.width * 0.9, max(overlayFontSize * 4, CGFloat(overlay.text.count) * overlayFontSize * 0.55))
+            let estimatedHeight = overlayFontSize * 1.6
+            rects.append(CGRect(
+                x: overlay.positionX * size.width - estimatedWidth * 0.5,
+                y: overlay.positionY * size.height - estimatedHeight * 0.5,
+                width: estimatedWidth,
+                height: estimatedHeight
+            ).insetBy(dx: -pad * 0.2, dy: -pad * 0.2))
+        }
+
+        return rects
+    }
+
+    private static func totalIntersectionArea(_ rect: CGRect, with protectedRects: [CGRect]) -> CGFloat {
+        protectedRects.reduce(0) { total, protectedRect in
+            let intersection = rect.intersection(protectedRect)
+            guard !intersection.isNull else { return total }
+            return total + intersection.width * intersection.height
+        }
+    }
+
+    private static func drawExportWatermark(in ctx: CGContext, size: CGSize, options: ExportOptions) {
+        let text = appWatermarkText
+        UIGraphicsPushContext(ctx)
+
+        let tileFontSize = max(22, min(size.width, size.height) * 0.044)
+        let tileFont = UIFont.systemFont(ofSize: tileFontSize, weight: .heavy)
+        let tileAttributes: [NSAttributedString.Key: Any] = [
+            .font: tileFont,
+            .foregroundColor: UIColor.white.withAlphaComponent(0.24)
+        ]
+        let tileStepY = tileFontSize * 3.6
+        let tileStepX = max(size.width * 0.82, tileFontSize * 15)
+        for y in stride(from: size.height * 0.08, through: size.height * 0.95, by: tileStepY) {
+            for x in stride(from: -size.width * 0.22, through: size.width * 1.05, by: tileStepX) {
+                ctx.saveGState()
+                ctx.translateBy(x: x, y: y)
+                ctx.rotate(by: -.pi / 7)
+                (text as NSString).draw(at: .zero, withAttributes: tileAttributes)
+                ctx.restoreGState()
+            }
+        }
+
+        let fontSize = max(20, min(size.width, size.height) * 0.034)
+        let font = UIFont.systemFont(ofSize: fontSize, weight: .bold)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor.white.withAlphaComponent(0.96)
+        ]
+        let textSize = (text as NSString).size(withAttributes: attributes)
+        let horizontalPadding = fontSize * 0.9
+        let verticalPadding = fontSize * 0.52
+        let margin = max(20, min(size.width, size.height) * 0.035)
+        let rect = CGRect(
+            x: (size.width - textSize.width - horizontalPadding * 2) / 2,
+            y: size.height - textSize.height - verticalPadding * 2 - margin,
+            width: textSize.width + horizontalPadding * 2,
+            height: textSize.height + verticalPadding * 2
+        )
+
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2)
+        UIColor.black.withAlphaComponent(0.62).setFill()
+        path.fill()
+        (text as NSString).draw(at: CGPoint(x: rect.minX + horizontalPadding,
+                                            y: rect.minY + verticalPadding),
+                                withAttributes: attributes)
+        UIGraphicsPopContext()
     }
 
     private static func uiFontWeight(_ name: String) -> UIFont.Weight {

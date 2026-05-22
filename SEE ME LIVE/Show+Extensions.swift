@@ -15,14 +15,7 @@ import CoreData
 extension Show {
     var titleOrEmpty: String   { title ?? "" }
     var venueOrEmpty: String   { venue ?? "" }
-    var roleOrEmpty: String    { role ?? "" }
-    var notesOrEmpty: String   { notes ?? "" }
-    var ticketLinkOrEmpty: String { ticketLink ?? "" }
     var dateOrNow: Date        { date ?? Date() }
-
-    var priceFormatted: String {
-        price > 0 ? String(format: "$%.2f", price) : "Free"
-    }
 
     /// Formatted date string like "Sat, Mar 15 · 8:00 PM"
     var dateFormatted: String {
@@ -40,21 +33,6 @@ extension Show {
         let days = calendar.dateComponents([.day], from: now, to: d).day ?? 0
         if days > 0 && days <= 7 { return "In \(days) days" }
         return ""
-    }
-
-    /// Returns a fully-qualified ticket URL, prepending https:// if no scheme is present.
-    var normalizedTicketURL: URL? {
-        guard let link = ticketLink, !link.isEmpty else { return nil }
-        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
-            return URL(string: trimmed)
-        }
-        return URL(string: "https://" + trimmed)
-    }
-
-    /// True if the show has a valid ticket link
-    var hasTicketLink: Bool {
-        return normalizedTicketURL != nil
     }
 
     // MARK: - Shared Formatters
