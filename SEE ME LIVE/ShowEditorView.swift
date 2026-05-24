@@ -308,7 +308,9 @@ struct ShowEditorView: View {
         show.date = date
         show.price = 0
         show.ticketLink = ""
-        show.notes = ""
+        if isNew {
+            show.notes = ""
+        }
         show.flyerImageData = nil
         show.addToCalendar = addToCalendar
         show.setReminder = setReminder

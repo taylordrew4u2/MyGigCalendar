@@ -21,6 +21,10 @@ struct ShowDetailView: View {
 
     @State private var showDeleteConfirmation = false
     @State private var appeared = false
+    @State private var roastWorkspace = RoastWorkspace()
+    @State private var newKnownBullet = ""
+    @State private var selectedJokeText = ""
+    @State private var saveRoastWorkItem: DispatchWorkItem?
 
     var body: some View {
         ScrollView {
@@ -37,6 +41,8 @@ struct ShowDetailView: View {
 
                     // MARK: Info Cards Grid
                     infoCardsGrid
+
+                    roastWorkspaceSection
 
                     // MARK: Action Buttons
                     VStack(spacing: 12) {
@@ -95,9 +101,13 @@ struct ShowDetailView: View {
             Text("This will remove the show from your calendar and public listing.")
         }
         .onAppear {
+            roastWorkspace = show.roastWorkspace
             withAnimation(.easeOut(duration: 0.4)) {
                 appeared = true
             }
+        }
+        .onDisappear {
+            persistRoastWorkspace()
         }
         .task {
             await purchaseManager.checkCurrentEntitlements()
@@ -128,6 +138,217 @@ struct ShowDetailView: View {
             }
             InfoCard(icon: "calendar", label: "Date & Time", value: show.dateFormatted, valueFontSize: showDateTextSize)
         }
+    }
+
+    // MARK: - Roast Workspace
+
+    private var roastWorkspaceSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 10) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(Color.accentColor.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Roast Mode")
+                        .font(.system(size: 18, weight: .bold))
+                    Text("Target notes, joke drafts, and ready lines")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            knownFactsSection
+            jokeNotepadSection
+            roastsSection
+        }
+        .padding(16)
+        .background(Color("CardBackground"))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
+        )
+    }
+
+    private var knownFactsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Things You Know", icon: "list.bullet")
+
+            if roastWorkspace.knownBullets.isEmpty {
+                Text("Add facts, habits, stories, tells, or details about this target.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(roastWorkspace.knownBullets.enumerated()), id: \.offset) { index, bullet in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("•")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Color.accentColor)
+                            Text(bullet)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.primary)
+                            Spacer(minLength: 8)
+                            Button {
+                                roastWorkspace.knownBullets.remove(at: index)
+                                persistRoastWorkspace()
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(.secondary.opacity(0.55))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField("Add something you know", text: $newKnownBullet)
+                    .font(.system(size: 14))
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.done)
+                    .onSubmit(addKnownBullet)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                Button(action: addKnownBullet) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .frame(width: 38, height: 38)
+                        .foregroundStyle(Color("AppBackground"))
+                        .background(Color.primary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .disabled(newKnownBullet.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(newKnownBullet.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+            }
+        }
+    }
+
+    private var jokeNotepadSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Joke Notepad", icon: "square.and.pencil")
+
+            SelectableNotepadTextView(
+                text: Binding(
+                    get: { roastWorkspace.jokePad },
+                    set: { newValue in
+                        roastWorkspace.jokePad = newValue
+                        persistRoastWorkspaceDebounced()
+                    }
+                ),
+                selectedText: $selectedJokeText
+            )
+            .frame(minHeight: 150)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            HStack(spacing: 10) {
+                Button {
+                    promoteSelectedJokeText()
+                } label: {
+                    Label("Promote Selection", systemImage: "arrow.up.doc.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .foregroundStyle(Color("AppBackground"))
+                        .background(Color.primary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .disabled(selectedJokeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(selectedJokeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+
+                Button {
+                    roastWorkspace.jokePad = ""
+                    selectedJokeText = ""
+                    persistRoastWorkspace()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 42, height: 42)
+                        .foregroundStyle(.red.opacity(0.75))
+                        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .disabled(roastWorkspace.jokePad.isEmpty)
+            }
+        }
+    }
+
+    private var roastsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Roasts", icon: "quote.bubble.fill")
+
+            if roastWorkspace.roasts.isEmpty {
+                Text("Highlight text in the notepad and promote it when a line is ready.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(Array(roastWorkspace.roasts.enumerated()), id: \.offset) { index, roast in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text(roast)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Button {
+                                roastWorkspace.roasts.remove(at: index)
+                                persistRoastWorkspace()
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.secondary.opacity(0.55))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(12)
+                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .tracking(0.6)
+    }
+
+    private func addKnownBullet() {
+        let trimmed = newKnownBullet.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        roastWorkspace.knownBullets.append(trimmed)
+        newKnownBullet = ""
+        persistRoastWorkspace()
+    }
+
+    private func promoteSelectedJokeText() {
+        let trimmed = selectedJokeText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        roastWorkspace.roasts.append(trimmed)
+        selectedJokeText = ""
+        persistRoastWorkspace()
+    }
+
+    private func persistRoastWorkspaceDebounced() {
+        saveRoastWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            persistRoastWorkspace()
+        }
+        saveRoastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: workItem)
+    }
+
+    private func persistRoastWorkspace() {
+        saveRoastWorkItem?.cancel()
+        show.roastWorkspace = roastWorkspace
+        show.updatedAt = Date()
+        PersistenceController.shared.save(context: viewContext)
     }
 
     // MARK: - Delete
@@ -217,6 +438,63 @@ private struct DetailCardPress: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+private struct SelectableNotepadTextView: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var selectedText: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.font = .systemFont(ofSize: 15)
+        textView.textColor = .label
+        textView.tintColor = UIColor(Color.accentColor)
+        textView.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 12, right: 10)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.isScrollEnabled = true
+        textView.alwaysBounceVertical = true
+        textView.keyboardDismissMode = .interactive
+        return textView
+    }
+
+    func updateUIView(_ textView: UITextView, context: Context) {
+        if textView.text != text {
+            textView.text = text
+        }
+        context.coordinator.parent = self
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: SelectableNotepadTextView
+
+        init(parent: SelectableNotepadTextView) {
+            self.parent = parent
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            parent.text = textView.text
+            updateSelection(from: textView)
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            updateSelection(from: textView)
+        }
+
+        private func updateSelection(from textView: UITextView) {
+            guard let range = Range(textView.selectedRange, in: textView.text),
+                  !range.isEmpty else {
+                parent.selectedText = ""
+                return
+            }
+            parent.selectedText = String(textView.text[range])
+        }
     }
 }
 
