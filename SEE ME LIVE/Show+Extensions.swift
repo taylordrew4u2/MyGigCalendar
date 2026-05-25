@@ -16,7 +16,6 @@ extension Show {
     var titleOrEmpty: String   { title ?? "" }
     var venueOrEmpty: String   { venue ?? "" }
     var dateOrNow: Date        { date ?? Date() }
-    private static let roastWorkspacePrefix = "SEE_ME_LIVE_ROAST_WORKSPACE_V1:"
 
     /// Formatted date string like "Sat, Mar 15 · 8:00 PM"
     var dateFormatted: String {
@@ -48,33 +47,4 @@ extension Show {
         f.dateFormat = "h:mm a"
         return f
     }()
-
-    var roastWorkspace: RoastWorkspace {
-        get {
-            guard let notes,
-                  notes.hasPrefix(Self.roastWorkspacePrefix) else {
-                return RoastWorkspace()
-            }
-
-            let json = String(notes.dropFirst(Self.roastWorkspacePrefix.count))
-            guard let data = json.data(using: .utf8),
-                  let workspace = try? JSONDecoder().decode(RoastWorkspace.self, from: data) else {
-                return RoastWorkspace()
-            }
-            return workspace
-        }
-        set {
-            guard let data = try? JSONEncoder().encode(newValue),
-                  let json = String(data: data, encoding: .utf8) else {
-                return
-            }
-            notes = Self.roastWorkspacePrefix + json
-        }
-    }
-}
-
-struct RoastWorkspace: Codable, Equatable {
-    var knownBullets: [String] = []
-    var jokePad: String = ""
-    var roasts: [String] = []
 }

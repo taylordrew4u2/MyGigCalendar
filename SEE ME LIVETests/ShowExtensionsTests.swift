@@ -119,27 +119,4 @@ final class ShowExtensionsTests: XCTestCase {
         let show = makeShow(date: Date())
         XCTAssertTrue(show.dateFormatted.contains("·"), "Expected date format like 'EEE, MMM d · h:mm a'")
     }
-
-    // MARK: - Roast Workspace
-
-    func testRoastWorkspace_roundTripsThroughNotes() {
-        let show = makeShow()
-        let workspace = RoastWorkspace(
-            knownBullets: ["Always late", "Owns three leather jackets"],
-            jokePad: "Draft line",
-            roasts: ["You dress like a midlife crisis with a rewards card."]
-        )
-
-        show.roastWorkspace = workspace
-
-        XCTAssertEqual(show.roastWorkspace, workspace)
-        XCTAssertNotNil(show.notes)
-    }
-
-    func testRoastWorkspace_whenNotesArePlainText_returnsEmptyWorkspace() {
-        let show = makeShow()
-        show.notes = "Legacy notes"
-
-        XCTAssertEqual(show.roastWorkspace, RoastWorkspace())
-    }
 }
