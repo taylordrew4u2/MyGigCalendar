@@ -254,6 +254,12 @@ struct ShareImageEditorView: View {
             restoreSavedOptions()
             if cachedImage.size == .zero { regeneratePreview() }
         }
+        .onDisappear {
+            // Remove the copied source video from temp when the editor closes.
+            if let bgVideoURL {
+                try? FileManager.default.removeItem(at: bgVideoURL)
+            }
+        }
         .task {
             await purchaseManager.loadProducts()
             regeneratePreview()
@@ -1481,8 +1487,22 @@ struct ShareImageEditorView: View {
             isRendering = false
 
             let vc = UIActivityViewController(activityItems: [activityItem], applicationActivities: nil)
+            // The exported video is written to a temp file; remove it once the
+            // share sheet is finished with it so exports don't accumulate.
+            if let exportedVideoURL = activityItem as? URL {
+                vc.completionWithItemsHandler = { _, _, _, _ in
+                    try? FileManager.default.removeItem(at: exportedVideoURL)
+                }
+            }
             guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let root = scene.windows.first?.rootViewController else { return }
+                  let root = scene.windows.first?.rootViewController else {
+                // The share sheet never gets presented, so its completion handler
+                // won't run — clean up the exported temp video here instead.
+                if let exportedVideoURL = activityItem as? URL {
+                    try? FileManager.default.removeItem(at: exportedVideoURL)
+                }
+                return
+            }
             var top = root
             while let p = top.presentedViewController { top = p }
             if let pop = vc.popoverPresentationController {
@@ -1515,7 +1535,17 @@ struct ShareImageEditorView: View {
         options: ExportOptions,
         showsWatermark: Bool
     ) async throws -> URL {
-        let asset = AVAsset(url: sourceURL)
+        // Free exports get the same degradation as the still-image path: blur the
+        // underlying video before compositing the watermark overlay. If the blur
+        // pass fails, the caller falls back to a blurred still image.
+        let workingSourceURL = showsWatermark ? try await blurredSourceVideo(sourceURL: sourceURL) : sourceURL
+        defer {
+            if workingSourceURL != sourceURL {
+                try? FileManager.default.removeItem(at: workingSourceURL)
+            }
+        }
+
+        let asset = AVAsset(url: workingSourceURL)
         let composition = AVMutableComposition()
 
         guard let sourceVideoTrack = try await asset.loadTracks(withMediaType: .video).first,
@@ -1594,6 +1624,44 @@ struct ShareImageEditorView: View {
         exportSession.outputFileType = .mp4
         exportSession.videoComposition = videoComposition
         exportSession.shouldOptimizeForNetworkUse = true
+
+        await withCheckedContinuation { continuation in
+            exportSession.exportAsynchronously {
+                continuation.resume()
+            }
+        }
+
+        if exportSession.status == .completed {
+            return outputURL
+        }
+
+        throw exportSession.error ?? VideoBackgroundExportError.exportFailed
+    }
+
+    /// Renders a gaussian-blurred copy of the source video to a temp file.
+    /// Used to degrade free exports the same way still images are blurred.
+    nonisolated private static func blurredSourceVideo(sourceURL: URL) async throws -> URL {
+        let asset = AVAsset(url: sourceURL)
+
+        let videoComposition = try await AVMutableVideoComposition.videoComposition(with: asset) { request in
+            let blurred = request.sourceImage
+                .clampedToExtent()
+                .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 6])
+                .cropped(to: request.sourceImage.extent)
+            request.finish(with: blurred, context: nil)
+        }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SEE-ME-LIVE-blur-\(UUID().uuidString)")
+            .appendingPathExtension("mp4")
+        try? FileManager.default.removeItem(at: outputURL)
+
+        guard let exportSession = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
+            throw VideoBackgroundExportError.exportSessionUnavailable
+        }
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.videoComposition = videoComposition
 
         await withCheckedContinuation { continuation in
             exportSession.exportAsynchronously {

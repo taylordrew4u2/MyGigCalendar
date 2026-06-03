@@ -150,10 +150,11 @@ enum HTMLExportService {
     }
 
     // MARK: - Legacy convenience wrapper (keeps existing callers building)
-    static func generateHTML(shows: [Show], performerName: String = "") -> String {
+    static func generateHTML(shows: [Show], performerName: String = "",
+                             showsWatermark: Bool = true) -> String {
         var opts = CalendarDisplayOptions()
         opts.performerName = performerName
-        return generateHTML(shows: shows, options: opts)
+        return generateHTML(shows: shows, options: opts, showsWatermark: showsWatermark)
     }
 
     /// Saves HTML to a temporary file and returns the URL

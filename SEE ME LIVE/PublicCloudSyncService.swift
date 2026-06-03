@@ -31,11 +31,7 @@ final class PublicCloudSyncService: Sendable {
     // MARK: - Account Check
 
     private func isCloudKitAvailable() async -> Bool {
-        do {
-            return try await CKContainer.default().accountStatus() == .available
-        } catch {
-            return false
-        }
+        await CloudAccountStatus.isAvailable()
     }
 
     func startSyncIfAvailable(using context: NSManagedObjectContext) async {

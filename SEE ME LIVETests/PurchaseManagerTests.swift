@@ -28,7 +28,7 @@ final class PurchaseManagerTests: XCTestCase {
     }
 
     func testLoadProducts_loadsRemoveWatermarkProduct() async {
-        let manager = PurchaseManager.shared
+        let manager = PurchaseManager()
 
         await manager.loadProducts()
 
@@ -37,7 +37,7 @@ final class PurchaseManagerTests: XCTestCase {
     }
 
     func testPurchaseRemoveWatermark_unlocksAndCachesAccess() async {
-        let manager = PurchaseManager.shared
+        let manager = PurchaseManager()
         await manager.loadProducts()
 
         await manager.purchaseRemoveWatermark()
@@ -47,7 +47,7 @@ final class PurchaseManagerTests: XCTestCase {
     }
 
     func testRestorePurchases_unlocksExistingTransaction() async throws {
-        let manager = PurchaseManager.shared
+        let manager = PurchaseManager()
         try await session.buyProduct(identifier: PurchaseManager.removeWatermarkProductID, options: [])
 
         await manager.restorePurchases()
@@ -57,7 +57,7 @@ final class PurchaseManagerTests: XCTestCase {
     }
 
     func testPendingPurchase_doesNotUnlock() async {
-        let manager = PurchaseManager.shared
+        let manager = PurchaseManager()
         session.askToBuyEnabled = true
         await manager.loadProducts()
 

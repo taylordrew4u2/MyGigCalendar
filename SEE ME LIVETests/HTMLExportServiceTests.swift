@@ -93,6 +93,28 @@ final class HTMLExportServiceTests: XCTestCase {
         XCTAssertTrue(html.contains("Performance Calendar"))
     }
 
+    // MARK: - Watermark Gating
+
+    func testGenerateHTML_withWatermark_containsWatermarkText() {
+        let html = HTMLExportService.generateHTML(shows: [], performerName: "", showsWatermark: true)
+        XCTAssertTrue(html.contains("Created with My Gig Calendar"))
+    }
+
+    func testGenerateHTML_withoutWatermark_hidesWatermarkButKeepsContent() {
+        let show = Show(context: context)
+        show.title = "Comedy Night Special"
+        show.venue = "Laugh Factory"
+        show.date = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+
+        let html = HTMLExportService.generateHTML(shows: [show], performerName: "", showsWatermark: false)
+        // The "Created with My Gig Calendar" string is unique to the watermark.
+        XCTAssertFalse(html.contains("Created with My Gig Calendar"))
+        // The rest of the page is still produced.
+        XCTAssertTrue(html.contains("My Gig Calendar"))      // header still present
+        XCTAssertTrue(html.contains("Comedy Night Special"))
+        XCTAssertTrue(html.contains("Laugh Factory"))
+    }
+
     func testGenerateHTML_performerNameMy_showsDefault() {
         let html = HTMLExportService.generateHTML(shows: [], performerName: "My")
         XCTAssertTrue(html.contains("Performance Calendar"))

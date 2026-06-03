@@ -55,7 +55,7 @@ struct PersistenceController {
             description.setOption(true as NSNumber,
                                   forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
 
-            if !inMemory && FileManager.default.ubiquityIdentityToken == nil {
+            if !inMemory && !CloudAccountStatus.isLikelyAvailableSynchronously {
                 description.cloudKitContainerOptions = nil
                 print("iCloud unavailable — local-only mode")
             }

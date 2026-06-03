@@ -303,13 +303,18 @@ struct ShowEditorView: View {
         let now = Date()
 
         show.title = title.trimmingCharacters(in: .whitespaces)
-        show.role = ""
         show.venue = venue.trimmingCharacters(in: .whitespaces)
         show.date = date
-        show.price = 0
-        show.ticketLink = ""
-        show.notes = ""
-        show.flyerImageData = nil
+        // Legacy fields (role/price/ticketLink/notes/flyerImageData) are no longer
+        // editable in the UI. Initialize them only for brand-new shows so that
+        // editing an existing show never destroys data saved by older versions.
+        if isNew {
+            show.role = ""
+            show.price = 0
+            show.ticketLink = ""
+            show.notes = ""
+            show.flyerImageData = nil
+        }
         show.addToCalendar = addToCalendar
         show.setReminder = setReminder
         show.userID = userID

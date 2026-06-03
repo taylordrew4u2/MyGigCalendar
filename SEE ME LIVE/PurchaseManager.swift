@@ -32,7 +32,9 @@ final class PurchaseManager: ObservableObject {
 
     private var transactionUpdatesTask: Task<Void, Never>?
 
-    private init() {
+    /// Internal (not private) so tests can create isolated instances instead of
+    /// mutating the shared singleton; production code should use `.shared`.
+    init() {
         hasRemovedWatermark = UserDefaults.standard.bool(forKey: Self.cachedRemoveWatermarkKey)
         transactionUpdatesTask = Task { [weak self] in
             for await verificationResult in Transaction.updates {
@@ -133,35 +135,52 @@ final class PurchaseManager: ObservableObject {
 
         do {
             try await AppStore.sync()
-            await checkCurrentEntitlements()
+            // A successful sync is authoritative: if no entitlement is present
+            // the user genuinely does not own it, so allow re-locking here.
+            await checkCurrentEntitlements(revokeIfMissing: true)
             statusMessage = hasRemovedWatermark ? "Purchase restored." : "No Remove Watermark purchase found."
         } catch {
+            // Sync failed (e.g. offline) — do not revoke a cached unlock.
             await checkCurrentEntitlements()
             statusMessage = "Restore failed. Please try again."
             Self.logStoreKitError(error, context: "restorePurchases")
         }
     }
 
-    func checkCurrentEntitlements() async {
+    func checkCurrentEntitlements(revokeIfMissing: Bool = false) async {
         var ownsRemoveWatermark = false
+        var sawRevokedRemoveWatermark = false
 
         for await verificationResult in Transaction.currentEntitlements {
             guard case .verified(let transaction) = verificationResult else {
                 continue
             }
+            guard transaction.productID == Self.removeWatermarkProductID else {
+                continue
+            }
 
-            if transaction.productID == Self.removeWatermarkProductID,
-               transaction.revocationDate == nil {
+            if transaction.revocationDate == nil {
                 ownsRemoveWatermark = true
                 break
+            } else {
+                sawRevokedRemoveWatermark = true
             }
         }
 
         if ownsRemoveWatermark {
             isPurchasePending = false
+            updateRemoveWatermarkAccess(true)
+            return
         }
 
-        updateRemoveWatermarkAccess(ownsRemoveWatermark)
+        // No active entitlement found. Only re-lock when we have a definitive
+        // signal — an explicit revocation, or a caller that expects authoritative
+        // data (restore). Otherwise keep the cached unlock so a paying user is
+        // not re-locked by a transiently empty entitlement set (e.g. a cold
+        // launch before StoreKit has finished syncing).
+        if sawRevokedRemoveWatermark || revokeIfMissing {
+            updateRemoveWatermarkAccess(false)
+        }
     }
 
     private func handleTransactionUpdate(_ verificationResult: VerificationResult<Transaction>) async {
