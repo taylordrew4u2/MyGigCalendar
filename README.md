@@ -1,233 +1,349 @@
-# SEE ME LIVE
+<div align="center">
+  <img src="screenshots/app-icon.png" alt="SEE ME LIVE App Icon" width="120" />
+  <h1>SEE ME LIVE</h1>
+  <p><strong>The calendar app built for live performers.</strong><br/>Add a show once — stay in sync everywhere.</p>
 
-**SEE ME LIVE is a published iOS App Store app for live performers who need one place to manage upcoming shows, keep their personal calendar current, and share professional public gig links with fans, bookers, and venues.**
+  ![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-black?logo=apple)
+  ![Swift](https://img.shields.io/badge/Swift-5.0-F05138?logo=swift&logoColor=white)
+  ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0066CC)
+  ![CloudKit](https://img.shields.io/badge/sync-CloudKit-007AFF)
+  ![App Store](https://img.shields.io/badge/App%20Store-Available-0D96F6?logo=app-store&logoColor=white)
+</div>
 
-This repository contains the native SwiftUI iOS app, CloudKit-backed persistence and sync layer, public calendar experience, iCalendar feed support, flyer/share-image studio, and automated tests.
+---
 
-## App Store Status
+SEE ME LIVE is a native iOS app for touring performers — comedians, musicians, speakers, and anyone with a live show schedule. Enter a gig once and it syncs privately across your Apple devices, mirrors to a public fan-facing calendar, and turns into a shareable promotional flyer — all without leaving the app.
 
-**Published on the iOS App Store.**
+## Table of Contents
 
-SEE ME LIVE is not a prototype or tutorial project. It is a real shipped iOS product with production concerns including persistence, iCloud sync, public data publishing, calendar integration, image generation, purchase-gated behavior, onboarding, privacy metadata, entitlements, and test coverage.
+- [Features](#features)
+- [Public Web Calendar](#public-web-calendar)
+- [Flyer Studio](#flyer-studio)
+- [iCalendar Feed](#icalendar-feed)
+- [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
+- [Data Model](#data-model)
+- [Getting Started](#getting-started)
+- [CloudKit Setup](#cloudkit-setup)
+- [Calendar Feed Deployment](#calendar-feed-deployment)
+- [Running Tests](#running-tests)
+- [Project Structure](#project-structure)
 
-## Live Surfaces
+---
 
-- iOS app: distributed through Apple's App Store.
-- Public performer calendar: `https://seemelive.vercel.app/?user=<USER_ID>`
-- Subscribable iCalendar feed: `https://seemelive.vercel.app/calendar.ics?user=<USER_ID>`
+## Features
 
-The public web surfaces require a valid user ID from an installed app instance.
+### Show Management
+- Add and edit shows with title, venue, date, time, price, ticket link, performer role, and notes
+- Attach a flyer photo from your camera roll or take one in-app
+- Calendar-first home screen with a full month view and scrollable upcoming list
+- Search across shows by title, venue, role, or notes
 
-## Product Overview
+### Sync & Calendars
+- **Private iCloud sync** via `NSPersistentCloudKitContainer` — your data syncs across all your Apple devices automatically
+- **Public CloudKit mirror** — each show is written to a public database so fans can view your schedule at your personal link
+- **EventKit integration** — optionally add any show to your iPhone's built-in Calendar app with a one-hour reminder
+- **Offline-resilient** — failed syncs are queued and retried when you come back online
 
-SEE ME LIVE is the working calendar a touring performer keeps in their pocket. The app stores each gig with title, role, venue, date and time, price, ticket link, notes, and optional flyer artwork. It keeps the performer's private data synced across Apple devices, optionally writes matching events into iPhone Calendar, mirrors future-dated shows to a public CloudKit database, and powers a public web calendar that fans and bookers can open or subscribe to.
+### Sharing
+- Generate promotional flyers for Instagram, TikTok, Twitter/X, and Facebook with one tap
+- Six social format presets (9:16, 1:1, 16:9, 1.91:1)
+- Custom backgrounds: solid color, gradient, or photo
+- Text overlays with full control over position, rotation, font size, weight, color, shadow, and outline
+- Save generated images directly to your photo library
 
-Primary user: a solo performer managing their own schedule.
+### Public Calendar
+- Every performer gets a unique public URL (`https://seemelive.vercel.app/?user=YOUR_ID`)
+- Shows appear grouped by month with ticket links and your performer role
+- Fans can subscribe with Apple Calendar, Google Calendar, or any app that supports iCalendar feeds
 
-Secondary users: fans, bookers, venues, and collaborators who receive the performer's public link.
+---
 
-## Problem
+## Public Web Calendar
 
-Performers often juggle dates across DMs, screenshots, group chats, email threads, ticketing pages, and venue calendars. Fans and bookers either cannot find the next show or land on out-of-date flyers. Keeping a personal calendar and a publishable show list in sync is repetitive enough that most performers stop doing it.
+Your public calendar is a fast, mobile-first webpage that fans and bookers can bookmark — no account required on their end.
 
-## Solution
+<div align="center">
+  <img src="screenshots/web-calendar-demo.png" alt="Public web calendar on mobile" width="320" />
+</div>
 
-The performer enters a show once. The app then:
+**What fans see:**
+- Your name as the calendar header
+- Shows grouped by month with date, time, venue, price, and your performer role
+- "Get tickets" links directly to your ticketing page
+- Subscribe buttons for Apple Calendar and Google Calendar
 
-1. Persists the private copy locally with Core Data.
-2. Syncs private user data across the performer's Apple devices through CloudKit.
-3. Optionally creates, updates, or deletes a matching iPhone Calendar event through EventKit.
-4. Mirrors a sanitized public copy to CloudKit's public database.
-5. Generates a public performer URL and subscribable calendar feed.
-6. Provides a flyer studio for creating social-media-ready promotional images from the same show data.
+**Desktop view:**
 
-## Core Features
+<div align="center">
+  <img src="screenshots/web-calendar-desktop.png" alt="Public web calendar on desktop" width="760" />
+</div>
 
-- Add, edit, and delete shows with title, role, venue, date, time, price, ticket link, notes, and optional flyer image.
-- Calendar-first home screen with month navigation, selected-date details, upcoming list, and past-show handling.
-- Local search across title, venue, role, and notes.
-- Private iCloud sync with `NSPersistentCloudKitContainer`.
-- Public CloudKit mirror for shareable web calendars.
-- EventKit integration for iPhone Calendar events and reminders.
-- Offline-tolerant public sync with retry behavior.
-- Photo library and camera flyer capture.
-- JPEG downscaling for efficient CloudKit asset uploads.
-- Flyer studio with social formats, templates, layout controls, overlays, colors, and export styles.
-- Public web calendar powered by CloudKit JS.
-- Subscribable iCalendar feed for Apple Calendar, Google Calendar, and other calendar clients.
-- StoreKit-facing purchase state for watermark removal.
-- Onboarding, splash, home, editor, detail, sharing, and export flows.
-- Privacy manifest and entitlements configured for real App Store distribution.
-- Unit tests for persistence, export, image generation, model helpers, and identity behavior.
+The page uses the CloudKit JS SDK to pull live data from the public database — so any show you add or delete in the app is reflected on the web immediately.
 
-## Technical Highlights
+---
 
-| Area | Implementation |
-| --- | --- |
-| Platform | Native iOS |
-| Language | Swift |
-| UI | SwiftUI |
+## Flyer Studio
+
+The built-in flyer studio generates ready-to-post promotional images from your show data. Pick a social format, customize the look, and export straight to your photo library.
+
+**Format presets:**
+
+| Preset | Ratio | Use case |
+|--------|-------|----------|
+| IG Story | 9:16 | Instagram / TikTok Stories |
+| IG Post | 1:1 | Instagram feed square |
+| TikTok | 9:16 | TikTok feed |
+| Twitter / X | 16:9 | Twitter card |
+| Facebook / OG | 1.91:1 | Facebook post, link preview |
+| Link Preview | 1.91:1 | General link meta image |
+
+**Background styles:** gradient, dark, light, solid color, or your own photo.
+
+**Text overlays:** drag to reposition, rotate, change font, weight, size, color, and add a shadow or outline. The watermark can be removed via an in-app purchase.
+
+---
+
+## iCalendar Feed
+
+Every public calendar comes with a subscribable `.ics` feed. Fans can add your schedule to any calendar app — updates sync automatically when you change a show.
+
+**Feed URL format:**
+```
+https://seemelive.vercel.app/calendar.ics?user=YOUR_USER_ID
+```
+
+**What's included in each calendar event:**
+- Show title and performer role
+- Date, time, and venue (as the event location)
+- Ticket link
+- Notes/description
+- A stable unique ID so updates don't create duplicates
+
+The feed is generated by a Vercel serverless function that queries the CloudKit public database and returns a valid RFC 5545 iCalendar file.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Language | Swift 5.0 |
+| UI Framework | SwiftUI |
 | Minimum OS | iOS 17+ |
-| Persistence | Core Data |
-| Private Sync | `NSPersistentCloudKitContainer` |
-| Public Data | CloudKit public database |
-| Calendar Integration | EventKit |
-| Photo Input | PhotosUI and camera capture |
-| Purchases | StoreKit-facing purchase manager |
-| Image Export | UIKit/Core Graphics rendering |
-| Web Calendar | Static HTML/CSS/JavaScript with CloudKit JS |
-| Calendar Feed | Vercel serverless `calendar.ics` endpoint |
-| Tests | XCTest target |
+| Local Storage | Core Data |
+| Private Sync | NSPersistentCloudKitContainer |
+| Public Database | CloudKit (public) |
+| Calendar | EventKit |
+| Photos | PhotosUI + AVFoundation |
+| Purchases | StoreKit 2 |
+| Image Rendering | UIKit Core Graphics |
+| Web Calendar | HTML/CSS/JS + CloudKit JS SDK |
+| Calendar Feed | Vercel serverless (Node.js 18+) |
+
+No third-party Swift dependencies — the app is 100% native Apple frameworks.
+
+---
 
 ## Architecture
 
-```text
-SEE ME LIVE iOS App
-|
-|-- SwiftUI screens
-|   |-- SplashScreenView
-|   |-- HomeScreenView
-|   |-- ShowEditorView
-|   |-- ShowDetailView
-|   |-- ShareImageEditorView
-|   |-- OnboardingWalkthroughView
-|
-|-- Local app data
-|   |-- Core Data Show entity
-|   |-- Persistence controller
-|   |-- CloudKit private database sync
-|
-|-- External integrations
-|   |-- CalendarService for EventKit
-|   |-- PublicCloudSyncService for public CloudKit records
-|   |-- PurchaseManager for paid feature state
-|   |-- UserIdentityService for stable public identity
-|
-|-- Sharing
-|   |-- ShareImageGenerator
-|   |-- HTMLExportService
-|   |-- docs/index.html public calendar
-|   |-- docs/calendar.ics.js calendar feed endpoint
-|
-|-- Tests
-    |-- PersistenceTests
-    |-- HTMLExportServiceTests
-    |-- ShareImageGeneratorTests
-    |-- ShowExtensionsTests
-    |-- UserIdentityServiceTests
-```
+The app is organized around five core services:
 
-## End-to-End Flow
+### PersistenceController
+Manages the Core Data stack using `NSPersistentCloudKitContainer`. All show data lives here and syncs automatically to the performer's private iCloud account. Uses `NSMergeByPropertyObjectTrumpMergePolicy` to keep local changes from being overwritten during sync.
 
-1. The performer opens the app. `SEE_ME_LIVEApp` shows the splash flow, then `HomeScreenView`.
-2. They add or edit a show in `ShowEditorView`, including optional flyer artwork.
-3. The show is saved to Core Data. `NSPersistentCloudKitContainer` syncs the private copy to the performer's iCloud.
-4. If calendar sync is enabled, `CalendarService` creates or updates an `EKEvent` and stores its identifier.
-5. `PublicCloudSyncService` writes a public `PublicShow` record, plus a `CKAsset` for flyer artwork when present.
-6. Failed public sync work is queued and retried on app launch and foreground.
-7. A visitor opens the performer's public URL. `docs/index.html` queries public CloudKit records and renders upcoming shows grouped by month.
-8. A visitor can subscribe to the schedule through `calendar.ics`, which returns a generated iCalendar feed.
+### PublicCloudSyncService
+A separate service that writes show data to the CloudKit **public** database — the same records that power the web calendar. It is offline-resilient: shows that fail to sync are flagged with a `needsPublicSync` attribute and retried on the next app launch or foreground transition. Pending deletes are queued in UserDefaults and flushed on availability.
 
-## What This Project Demonstrates
+### CalendarService
+An EventKit wrapper that creates and updates iPhone Calendar events. It maintains a custom "My Gig Calendar" calendar entry with a distinctive color and stores the EKEvent identifier inside each Core Data show record so future edits update the same event rather than creating duplicates.
 
-- Shipping a native iOS app to the App Store.
-- Designing a complete SwiftUI app with production screens and user flows.
-- Modeling durable local data with Core Data.
-- Syncing private app data across devices with CloudKit.
-- Separating private user data from public shareable records.
-- Integrating Apple system services such as iCloud, Calendar, Photos, and StoreKit-facing purchase state.
-- Building a custom social image generation workflow.
-- Handling async work, offline-friendly retries, and public data publishing.
-- Building a companion public web surface and calendar feed.
-- Writing tests around persistence, formatting, identity, and export logic.
-- Maintaining privacy metadata, entitlements, and project structure required for App Store distribution.
+### UserIdentityService
+Generates a stable UUID on first launch, stores it in UserDefaults, and attaches it to every public CloudKit record. This UUID becomes the `?user=` parameter in your public calendar URL — it never changes, so shared links don't break when the app is reinstalled.
 
-## Repository Structure
+### PurchaseManager
+Handles the StoreKit 2 in-app purchase for watermark removal (`comedy.SEEMELIVE.remove_watermark`). Observes transaction updates in real time and caches purchase state in UserDefaults so the entitlement persists across launches without a network call.
 
-```text
-SEE ME LIVE/
-├── SEE ME LIVE/                       # Main iOS app source
-│   ├── SEE_ME_LIVEApp.swift           # App entry point
-│   ├── SplashScreenView.swift         # Launch/splash flow
-│   ├── HomeScreenView.swift           # Calendar-first dashboard
-│   ├── ShowEditorView.swift           # Add/edit show workflow
-│   ├── ShowDetailView.swift           # Show detail screen
-│   ├── ShareImageEditorView.swift     # Flyer studio and export UI
-│   ├── ShareImageGenerator.swift      # Promotional image rendering
-│   ├── CalendarService.swift          # EventKit integration
-│   ├── PublicCloudSyncService.swift   # Public CloudKit sync and retry logic
-│   ├── Persistence.swift              # Core Data and CloudKit stack
-│   ├── PurchaseManager.swift          # Paid feature state
-│   ├── UserIdentityService.swift      # Stable public identity handling
-│   ├── HTMLExportService.swift        # Public calendar/export helpers
-│   ├── DateTextSizeSheet.swift        # Date text size settings UI
-│   ├── BrandLogoView.swift            # SwiftUI brand mark
-│   ├── Show+Extensions.swift          # Show model convenience behavior
-│   ├── PrivacyInfo.xcprivacy          # App privacy manifest
-│   ├── SEE_ME_LIVE.entitlements       # iCloud/CloudKit entitlements
-│   ├── Info.plist                     # Usage descriptions and app metadata
-│   ├── Assets.xcassets/               # App icons, colors, and image assets
-│   └── SEE_ME_LIVE.xcdatamodeld/      # Core Data model
-├── SEE ME LIVETests/                  # Unit tests
-│   ├── HTMLExportServiceTests.swift
-│   ├── PersistenceTests.swift
-│   ├── ShareImageGeneratorTests.swift
-│   ├── ShowExtensionsTests.swift
-│   └── UserIdentityServiceTests.swift
-├── docs/                              # Public web calendar and feed endpoint
-│   ├── index.html
-│   └── calendar.ics.js
-├── SEE ME LIVE.xcodeproj/
-├── CALENDAR_FEED_SETUP.md
-├── CLOUDKIT_SETUP.md
-├── vercel.json
-└── README.md
-```
+### ShareImageGenerator
+Renders promotional images to `UIImage` using Core Graphics. Accepts a show record, a format preset, background style, and an array of text overlay descriptors. Images are JPEG-compressed before CloudKit upload to minimize storage costs.
 
-## How to Run Locally
+---
 
-Prerequisites:
+## Data Model
 
+The Core Data `Show` entity has 18 attributes:
+
+| Attribute | Type | Notes |
+|-----------|------|-------|
+| `title` | String | Required |
+| `venue` | String | Required |
+| `date` | Date | Required |
+| `role` | String? | Headliner, Feature, etc. |
+| `price` | Double? | Ticket price |
+| `ticketLink` | String? | URL |
+| `notes` | String? | Freeform notes |
+| `flyerImageData` | Binary? | JPEG, external storage |
+| `calendarEventID` | String? | EKEvent identifier |
+| `publicRecordID` | String? | CloudKit record name |
+| `userID` | String | Stable UUID from UserIdentityService |
+| `addToCalendar` | Boolean | Default: YES |
+| `setReminder` | Boolean | Default: NO |
+| `needsPublicSync` | Boolean | Offline retry flag |
+| `pendingPublicDelete` | Boolean | Offline delete queue |
+| `lastPublicSyncError` | String? | Error tracking |
+| `createdAt` | Date | Required |
+| `updatedAt` | Date | Required |
+
+The CloudKit public database mirrors a subset of these fields in a `PublicShow` record type, excluding all local-only attributes like `calendarEventID` and `needsPublicSync`.
+
+---
+
+## Getting Started
+
+**Prerequisites:**
 - macOS with Xcode 15 or later
-- iOS 17+ simulator or device
-- Apple Developer account for CloudKit/App Store capabilities
-- Node.js 18+ to run the `calendar.ics` function locally
+- iOS 17+ device or simulator
+- Apple Developer account (required for CloudKit and App Store capabilities)
+- Node.js 18+ (only needed for the calendar feed serverless function)
 
-iOS app:
-
+**Clone and open:**
 ```bash
 git clone https://github.com/taylordrew4u2/seemelive.git
 cd seemelive
 open "SEE ME LIVE.xcodeproj"
 ```
 
-Public web calendar:
+Select the **SEE ME LIVE** scheme, choose a simulator or connected device, and press **Cmd+R**.
 
+> **Note:** CloudKit features require a valid iCloud account on the device/simulator. The app detects iCloud availability at launch and gracefully disables sync if unavailable.
+
+**Run the web calendar locally:**
 ```bash
 npx vercel dev
+# Web calendar: http://localhost:3000/?user=<YOUR_USER_ID>
+# iCal feed:    http://localhost:3000/calendar.ics?user=<YOUR_USER_ID>
 ```
 
-CloudKit and calendar feed setup details are documented in:
+Your `YOUR_USER_ID` is shown in the app's share sheet when you tap the public calendar link.
 
-- `CLOUDKIT_SETUP.md`
-- `CALENDAR_FEED_SETUP.md`
+---
 
-## Testing
+## CloudKit Setup
 
-Run the `SEE ME LIVETests` target from Xcode.
+See [`CLOUDKIT_SETUP.md`](CLOUDKIT_SETUP.md) for the full walkthrough. The short version:
 
-The test suite covers:
+1. Create an iCloud container named `iCloud.comedy.SEE-ME-LIVE` in your Apple Developer account.
+2. In the CloudKit Dashboard, open the **public database** and create a `PublicShow` record type with these fields:
 
-- Core Data persistence behavior
-- HTML export behavior
-- Share image generation behavior
-- Show model convenience extensions
-- User identity generation and stability
+   | Field | Type |
+   |-------|------|
+   | `title` | String |
+   | `role` | String |
+   | `venue` | String |
+   | `date` | Date/Time |
+   | `price` | Double |
+   | `ticketLink` | String |
+   | `notes` | String |
+   | `userID` | String |
+   | `flyer` | Asset |
 
-## Notes for Employers
+3. Add indexes on `userID` (Queryable), `date` (Queryable + Sortable), and `recordName` (Queryable).
+4. Generate an API token for the CloudKit JS SDK (used by the web calendar).
+5. In Xcode, confirm your signing configuration includes the **CloudKit** and **Background Modes → Remote Notifications** capabilities.
 
-This codebase shows end-to-end product execution: native app development, Apple framework integration, cloud sync, public data publishing, production distribution, and testable app architecture. The project also reflects real-world tradeoffs around offline behavior, privacy boundaries, App Store requirements, and user-facing polish.
+---
 
-## About
+## Calendar Feed Deployment
 
-Built and shipped by Taylor Drew as a production iOS app for performers.
+See [`CALENDAR_FEED_SETUP.md`](CALENDAR_FEED_SETUP.md) for full details.
+
+1. Deploy `docs/calendar.ics.js` to Vercel (or any Node.js serverless platform).
+2. Set the environment variable `CLOUDKIT_API_TOKEN` to the token generated in the CloudKit Dashboard.
+3. Update the feed URL in `docs/index.html` if you're using a custom domain.
+4. Verify with:
+   ```bash
+   curl "https://your-domain.vercel.app/calendar.ics?user=SOME_USER_ID"
+   ```
+   You should get a `text/calendar` response in iCalendar format.
+
+---
+
+## Running Tests
+
+The test suite covers all core services and utility layers.
+
+**In Xcode:** Select the **SEE ME LIVETests** scheme and press **Cmd+U**.
+
+**From the command line:**
+```bash
+xcodebuild test \
+  -scheme "SEE ME LIVE" \
+  -destination "platform=iOS Simulator,name=iPhone 15"
+```
+
+| Test File | Coverage Area |
+|-----------|--------------|
+| `PersistenceTests.swift` | Core Data stack, save/fetch, merge policy |
+| `HTMLExportServiceTests.swift` | HTML generation logic |
+| `ShareImageGeneratorTests.swift` | Image rendering with presets and overlays |
+| `ShowExtensionsTests.swift` | Convenience accessors, date formatting |
+| `UserIdentityServiceTests.swift` | UUID generation and persistence |
+| `PurchaseManagerTests.swift` | Purchase state, product loading, transactions |
+
+---
+
+## Project Structure
+
+```
+seemelive/
+├── SEE ME LIVE/                      # iOS app source (~7,850 lines of Swift)
+│   ├── SEE_ME_LIVEApp.swift          # App entry point, splash → onboarding → home flow
+│   ├── SplashScreenView.swift        # Animated launch screen (stage lights)
+│   ├── OnboardingWalkthroughView.swift
+│   ├── HomeScreenView.swift          # Month calendar + upcoming list + search
+│   ├── ShowEditorView.swift          # Add/edit show form
+│   ├── ShowDetailView.swift          # Show detail + edit/share/delete actions
+│   ├── ShareImageEditorView.swift    # Flyer studio UI (style, layout, text, colors)
+│   ├── ShareImageGenerator.swift     # Core Graphics image rendering engine
+│   ├── CalendarService.swift         # EventKit wrapper
+│   ├── PublicCloudSyncService.swift  # Public CloudKit sync + offline retry
+│   ├── Persistence.swift             # Core Data + CloudKit stack
+│   ├── PurchaseManager.swift         # StoreKit 2 purchase state
+│   ├── UserIdentityService.swift     # Stable UUID generation
+│   ├── HTMLExportService.swift       # HTML generation helpers
+│   └── Show+Extensions.swift        # Convenience accessors + date formatters
+│
+├── SEE ME LIVETests/                 # Unit tests (6 files)
+│
+├── docs/
+│   ├── index.html                    # Public performer calendar (CloudKit JS)
+│   └── calendar.ics.js              # iCalendar feed (Vercel serverless)
+│
+├── screenshots/                      # README demo images
+│   ├── app-icon.png
+│   ├── web-calendar-demo.png
+│   └── web-calendar-desktop.png
+│
+├── CLOUDKIT_SETUP.md
+├── CALENDAR_FEED_SETUP.md
+└── vercel.json
+```
+
+---
+
+## App Permissions
+
+The app requests the following permissions at runtime:
+
+| Permission | Reason |
+|-----------|--------|
+| Calendar (Full Access) | Create and update iPhone Calendar events for your shows |
+| Camera | Take photos to use as flyer backgrounds |
+| Photo Library (Read) | Choose existing photos for flyers |
+| Photo Library (Add) | Save generated flyer images |
+
+---
+
+<div align="center">
+  <sub>Built for live performers. Available on the App Store.</sub>
+</div>
