@@ -1,18 +1,20 @@
 <div align="center">
-  <img src="screenshots/app-icon.png" alt="SEE ME LIVE App Icon" width="120" />
-  <h1>SEE ME LIVE</h1>
+  <img src="screenshots/app-icon-appstore.jpg" alt="My Gig Calendar App Icon" width="120" />
+  <h1>My Gig Calendar</h1>
   <p><strong>The calendar app built for live performers.</strong><br/>Add a show once — stay in sync everywhere.</p>
 
-  ![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-black?logo=apple)
+  [![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-black?logo=apple)](https://apps.apple.com/us/app/my-gig-calendar/id6760590068)
   ![Swift](https://img.shields.io/badge/Swift-5.0-F05138?logo=swift&logoColor=white)
   ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0066CC)
   ![CloudKit](https://img.shields.io/badge/sync-CloudKit-007AFF)
-  ![App Store](https://img.shields.io/badge/App%20Store-Available-0D96F6?logo=app-store&logoColor=white)
+  [![App Store](https://img.shields.io/badge/App%20Store-Download-0D96F6?logo=app-store&logoColor=white)](https://apps.apple.com/us/app/my-gig-calendar/id6760590068)
 </div>
 
 ---
 
-SEE ME LIVE is a native iOS app for touring performers — comedians, musicians, speakers, and anyone with a live show schedule. Enter a gig once and it syncs privately across your Apple devices, mirrors to a public fan-facing calendar, and turns into a shareable promotional flyer — all without leaving the app.
+**[Download on the App Store](https://apps.apple.com/us/app/my-gig-calendar/id6760590068)**
+
+My Gig Calendar is a native iOS app for touring performers — comedians, musicians, speakers, and anyone with a live show schedule. Enter a gig once and it syncs privately across your Apple devices, mirrors to a public fan-facing calendar, and turns into a shareable promotional flyer — all without leaving the app.
 
 ## Table of Contents
 
@@ -53,7 +55,7 @@ SEE ME LIVE is a native iOS app for touring performers — comedians, musicians,
 - Save generated images directly to your photo library
 
 ### Public Calendar
-- Every performer gets a unique public URL (`https://seemelive.vercel.app/?user=YOUR_ID`)
+- Every performer gets a unique public URL (`https://seemelive.vercel.app/?user=YOUR_ID`) — shareable directly from the app
 - Shows appear grouped by month with ticket links and your performer role
 - Fans can subscribe with Apple Calendar, Google Calendar, or any app that supports iCalendar feeds
 
@@ -147,7 +149,7 @@ No third-party Swift dependencies — the app is 100% native Apple frameworks.
 
 ## Architecture
 
-The app is organized around five core services:
+The app is organized around six core services:
 
 ### PersistenceController
 Manages the Core Data stack using `NSPersistentCloudKitContainer`. All show data lives here and syncs automatically to the performer's private iCloud account. Uses `NSMergeByPropertyObjectTrumpMergePolicy` to keep local changes from being overwritten during sync.
@@ -345,5 +347,5 @@ The app requests the following permissions at runtime:
 ---
 
 <div align="center">
-  <sub>Built for live performers. Available on the App Store.</sub>
+  <sub>Built for live performers. <a href="https://apps.apple.com/us/app/my-gig-calendar/id6760590068">Download My Gig Calendar on the App Store.</a></sub>
 </div>
