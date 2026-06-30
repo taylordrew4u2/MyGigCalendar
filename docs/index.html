@@ -59,6 +59,13 @@
 
         a { color: inherit; }
 
+        /* Visible focus ring for keyboard users on every interactive element. */
+        :focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
         .page {
             max-width: 640px;
             margin: 0 auto;
@@ -274,15 +281,26 @@
 
         .show-action a:hover .arrow { transform: translateX(2px); }
 
-        /* Flyer thumb (only when present) */
+        /* Flyer thumb (only when present). Rendered as a <button> so it is
+           keyboard-operable; reset the native button chrome. */
         .flyer-thumb {
+            appearance: none;
+            -webkit-appearance: none;
             margin-top: 12px;
+            padding: 0;
             width: 100%;
             max-width: 420px;
-            height: auto;
             border-radius: 10px;
             border: 1px solid var(--border);
+            background: none;
             cursor: zoom-in;
+            display: block;
+        }
+
+        .flyer-thumb img {
+            width: 100%;
+            height: auto;
+            border-radius: inherit;
             display: block;
         }
 
@@ -332,6 +350,14 @@
                 margin-top: 4px;
             }
         }
+
+        /* Honour users who ask for less motion. */
+        @media (prefers-reduced-motion: reduce) {
+            .spinner { animation: none; }
+            .subscribe button,
+            .subscribe a,
+            .show-action a .arrow { transition: none; }
+        }
     </style>
 </head>
 <body>
@@ -352,9 +378,13 @@
             <button id="copyBtn" type="button">Copy feed link</button>
         </div>
 
-        <div class="status" id="loading"><span class="spinner"></span>Loading shows…</div>
-        <div class="status" id="empty" hidden>No upcoming shows right now. Check back soon.</div>
-        <div class="status error" id="error" hidden></div>
+        <!-- Status region: a single live area so screen readers announce
+             loading / empty / error transitions as they happen. -->
+        <div class="status" id="loading" role="status">
+            <span class="spinner" aria-hidden="true"></span>Loading shows…
+        </div>
+        <div class="status" id="empty" role="status" hidden>No upcoming shows right now. Check back soon.</div>
+        <div class="status error" id="error" role="alert" hidden></div>
 
         <div id="shows" hidden></div>
 
@@ -365,99 +395,135 @@
     </div>
 
     <script>
+    "use strict";
+
     // ================================================================
-    // CloudKit JS Configuration
+    // Configuration
     // ================================================================
 
-    const CONTAINER_ID  = 'iCloud.comedy.SEE-ME-LIVE';
-    const API_TOKEN     = '973fea23642dcde5150a44716fa5b34bc7b1d4502f37851654e926d675fe7132';
-    const ENVIRONMENT   = 'production';
+    const CLOUDKIT = {
+        containerIdentifier: 'iCloud.comedy.SEE-ME-LIVE',
+        // Public read-only API token — safe to ship to the browser, this is
+        // exactly how CloudKit JS is designed to expose a public database.
+        apiToken: '973fea23642dcde5150a44716fa5b34bc7b1d4502f37851654e926d675fe7132',
+        environment: 'production',
+    };
+    const FEED_ORIGIN = 'https://seemelive.vercel.app';
 
-    const params = new URLSearchParams(window.location.search);
-    const userID = params.get('user');
+    // Cache element references once instead of querying the DOM repeatedly.
+    const els = {
+        profileTagline: document.getElementById('profileTagline'),
+        subscribe:      document.getElementById('subscribe'),
+        appleBtn:       document.getElementById('appleBtn'),
+        googleBtn:      document.getElementById('googleBtn'),
+        copyBtn:        document.getElementById('copyBtn'),
+        loading:        document.getElementById('loading'),
+        empty:          document.getElementById('empty'),
+        error:          document.getElementById('error'),
+        shows:          document.getElementById('shows'),
+    };
+
+    const userID = new URLSearchParams(window.location.search).get('user');
 
     if (!userID) {
         showError('No user ID provided. Use a link from the SEE ME LIVE app.');
     } else {
         setupSubscribe(userID);
-        initCloudKit();
+        loadShows(userID);
     }
 
-    function showError(msg) {
-        document.getElementById('loading').hidden = true;
-        const el = document.getElementById('error');
-        el.hidden = false;
-        el.textContent = msg;
+    // ================================================================
+    // View state — exactly one of these panels is visible at a time.
+    // ================================================================
+
+    function showOnly(visible) {
+        [els.loading, els.empty, els.error, els.shows].forEach(el => {
+            el.hidden = el !== visible;
+        });
     }
+
+    function showError(message) {
+        els.error.textContent = message;
+        showOnly(els.error);
+    }
+
+    function showEmpty() {
+        showOnly(els.empty);
+    }
+
+    // ================================================================
+    // Calendar subscription links
+    // ================================================================
 
     function setupSubscribe(userID) {
-        const feedURL    = 'https://seemelive.vercel.app/calendar.ics?user=' + encodeURIComponent(userID);
-        const webcalURL  = 'webcal://seemelive.vercel.app/calendar.ics?user=' + encodeURIComponent(userID);
-        const googleURL  = 'https://calendar.google.com/calendar/u/0/r?cid=' + encodeURIComponent(feedURL);
+        const feedURL = `${FEED_ORIGIN}/calendar.ics?user=${encodeURIComponent(userID)}`;
+        const webcalURL = feedURL.replace(/^https?:/, 'webcal:');
+        const googleURL = `https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(feedURL)}`;
 
-        document.getElementById('appleBtn').href = webcalURL;
-        document.getElementById('googleBtn').href = googleURL;
+        els.appleBtn.href = webcalURL;
+        els.googleBtn.href = googleURL;
 
-        const copyBtn = document.getElementById('copyBtn');
-        copyBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(feedURL).then(() => {
-                copyBtn.textContent = 'Copied';
-                copyBtn.classList.add('is-copied');
-                setTimeout(() => {
-                    copyBtn.textContent = 'Copy feed link';
-                    copyBtn.classList.remove('is-copied');
-                }, 1800);
-            });
+        els.copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(feedURL);
+                flashCopied();
+            } catch {
+                // Clipboard can be unavailable (e.g. insecure context); fall
+                // back to the feed link the buttons already expose.
+            }
         });
 
-        document.getElementById('subscribe').hidden = false;
+        els.subscribe.hidden = false;
     }
 
-    async function initCloudKit() {
+    function flashCopied() {
+        els.copyBtn.textContent = 'Copied';
+        els.copyBtn.classList.add('is-copied');
+        setTimeout(() => {
+            els.copyBtn.textContent = 'Copy feed link';
+            els.copyBtn.classList.remove('is-copied');
+        }, 1800);
+    }
+
+    // ================================================================
+    // Data loading
+    // ================================================================
+
+    async function loadShows(userID) {
         try {
             CloudKit.configure({
                 containers: [{
-                    containerIdentifier: CONTAINER_ID,
-                    apiTokenAuth: { apiToken: API_TOKEN, persist: false },
-                    environment: ENVIRONMENT
-                }]
+                    containerIdentifier: CLOUDKIT.containerIdentifier,
+                    apiTokenAuth: { apiToken: CLOUDKIT.apiToken, persist: false },
+                    environment: CLOUDKIT.environment,
+                }],
             });
 
-            const container = CloudKit.getDefaultContainer();
-            const db = container.publicCloudDatabase;
-
-            const query = {
+            const db = CloudKit.getDefaultContainer().publicCloudDatabase;
+            const response = await db.performQuery({
                 recordType: 'PublicShow',
                 filterBy: [{
                     fieldName: 'userID',
                     comparator: 'EQUALS',
-                    fieldValue: { value: userID }
+                    fieldValue: { value: userID },
                 }],
-                sortBy: [{ fieldName: 'date', ascending: true }]
-            };
-
-            const response = await db.performQuery(query);
-            document.getElementById('loading').hidden = true;
-
-            if (!response.records || response.records.length === 0) {
-                document.getElementById('empty').hidden = false;
-                return;
-            }
+                sortBy: [{ fieldName: 'date', ascending: true }],
+            });
 
             const now = new Date();
-            const shows = response.records
+            const shows = (response.records || [])
                 .map(recordToShow)
-                .filter(s => s.date >= now)
+                .filter(show => show.date >= now)
                 .sort((a, b) => a.date - b.date);
 
             if (shows.length === 0) {
-                document.getElementById('empty').hidden = false;
+                showEmpty();
                 return;
             }
 
-            updateProfileSummary(shows);
+            updateTagline(shows[0]);
             renderShows(shows);
-
+            showOnly(els.shows);
         } catch (err) {
             console.error('CloudKit error:', err);
             showError('Failed to load shows. Please try again later.');
@@ -466,44 +532,34 @@
 
     function recordToShow(record) {
         const f = record.fields || {};
+        const value = (field, fallback) => (f[field] ? f[field].value : fallback);
         return {
-            title:      f.title      ? f.title.value      : '',
-            role:       f.role       ? f.role.value       : '',
-            venue:      f.venue      ? f.venue.value      : '',
-            date:       f.date       ? new Date(f.date.value) : new Date(),
-            price:      f.price      ? f.price.value      : 0,
-            ticketLink: f.ticketLink ? f.ticketLink.value : '',
-            notes:      f.notes      ? f.notes.value      : '',
-            flyerURL:   f.flyer      ? f.flyer.value.downloadURL : null
+            title:      value('title', ''),
+            role:       value('role', ''),
+            venue:      value('venue', ''),
+            date:       f.date ? new Date(f.date.value) : new Date(),
+            price:      value('price', 0),
+            ticketLink: value('ticketLink', ''),
+            notes:      value('notes', ''),
+            flyerURL:   f.flyer ? f.flyer.value.downloadURL : null,
         };
     }
 
-    function updateProfileSummary(shows) {
-        const next = shows[0];
-        const tagline = document.getElementById('profileTagline');
-        if (next) {
-            const formatted = next.date.toLocaleDateString(undefined, {
-                month: 'short', day: 'numeric'
-            });
-            tagline.textContent = `Next up · ${formatted}`;
-        }
+    function updateTagline(nextShow) {
+        const formatted = nextShow.date.toLocaleDateString(undefined, {
+            month: 'short', day: 'numeric',
+        });
+        els.profileTagline.textContent = `Next up · ${formatted}`;
     }
 
+    // ================================================================
+    // Rendering
+    // ================================================================
+
     function renderShows(shows) {
-        const container = document.getElementById('shows');
-        container.hidden = false;
-        container.innerHTML = '';
+        els.shows.replaceChildren();
 
-        const grouped = new Map();
-        shows.forEach(show => {
-            const key = show.date.toLocaleString(undefined, {
-                month: 'long', year: 'numeric'
-            });
-            if (!grouped.has(key)) grouped.set(key, []);
-            grouped.get(key).push(show);
-        });
-
-        for (const [month, items] of grouped) {
+        for (const [month, items] of groupByMonth(shows)) {
             const group = document.createElement('section');
             group.className = 'month-group';
 
@@ -513,107 +569,174 @@
             group.appendChild(label);
 
             items.forEach(show => group.appendChild(renderRow(show)));
-            container.appendChild(group);
+            els.shows.appendChild(group);
         }
+    }
+
+    function groupByMonth(shows) {
+        const groups = new Map();
+        for (const show of shows) {
+            const key = show.date.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(show);
+        }
+        return groups;
     }
 
     function renderRow(show) {
+        const title = show.title || 'Untitled show';
+
         const row = document.createElement('article');
         row.className = 'show-row';
+        row.appendChild(renderDateBlock(show.date));
 
-        // Date block
-        const date = document.createElement('div');
-        date.className = 'date-block';
-        const month = document.createElement('span');
-        month.className = 'month';
-        month.textContent = show.date.toLocaleString(undefined, { month: 'short' });
-        const day = document.createElement('span');
-        day.className = 'day';
-        day.textContent = show.date.getDate();
-        date.appendChild(month);
-        date.appendChild(day);
-        row.appendChild(date);
-
-        // Info column
         const info = document.createElement('div');
         info.className = 'show-info';
-
-        const title = document.createElement('h3');
-        title.className = 'title';
-        title.textContent = show.title || 'Untitled show';
-        info.appendChild(title);
-
-        const meta = document.createElement('p');
-        meta.className = 'meta';
-        const time = show.date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-        const dayOfWeek = show.date.toLocaleDateString(undefined, { weekday: 'short' });
-        meta.appendChild(textNode(`${dayOfWeek}, ${time}`));
-        if (show.venue) {
-            meta.appendChild(separator());
-            meta.appendChild(textNode(show.venue));
-        }
-        if (show.price > 0) {
-            meta.appendChild(separator());
-            meta.appendChild(textNode('$' + show.price.toFixed(2)));
-        }
-        info.appendChild(meta);
-
-        if (show.role) {
-            const role = document.createElement('span');
-            role.className = 'role';
-            role.textContent = show.role;
-            info.appendChild(role);
-        }
-
-        if (show.flyerURL) {
-            const img = document.createElement('img');
-            img.className = 'flyer-thumb';
-            img.src = show.flyerURL;
-            img.alt = (show.title || 'Show') + ' flyer';
-            img.loading = 'lazy';
-            img.addEventListener('click', () => openLightbox(show.flyerURL));
-            info.appendChild(img);
-        }
-
+        info.appendChild(renderTitle(title));
+        info.appendChild(renderMeta(show));
+        if (show.role) info.appendChild(renderRole(show.role));
+        if (show.flyerURL) info.appendChild(renderFlyer(show.flyerURL, title));
         row.appendChild(info);
 
-        // Action column
-        const action = document.createElement('div');
-        action.className = 'show-action';
-        if (show.ticketLink) {
-            const link = document.createElement('a');
-            link.href = show.ticketLink;
-            link.target = '_blank';
-            link.rel = 'noopener';
-            link.innerHTML = 'Tickets <span class="arrow">→</span>';
-            action.appendChild(link);
-        }
-        row.appendChild(action);
-
+        row.appendChild(renderAction(show.ticketLink));
         return row;
     }
 
-    function textNode(text) {
-        const span = document.createElement('span');
-        span.textContent = text;
-        return span;
+    function renderDateBlock(date) {
+        const block = document.createElement('div');
+        block.className = 'date-block';
+
+        const month = document.createElement('span');
+        month.className = 'month';
+        month.textContent = date.toLocaleString(undefined, { month: 'short' });
+
+        const day = document.createElement('span');
+        day.className = 'day';
+        day.textContent = date.getDate();
+
+        block.append(month, day);
+        return block;
+    }
+
+    function renderTitle(title) {
+        const el = document.createElement('h3');
+        el.className = 'title';
+        el.textContent = title;
+        return el;
+    }
+
+    function renderMeta(show) {
+        const meta = document.createElement('p');
+        meta.className = 'meta';
+
+        const time = show.date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        const dayOfWeek = show.date.toLocaleDateString(undefined, { weekday: 'short' });
+        meta.appendChild(span(`${dayOfWeek}, ${time}`));
+
+        if (show.venue) {
+            meta.append(separator(), span(show.venue));
+        }
+        if (show.price > 0) {
+            meta.append(separator(), span(`$${show.price.toFixed(2)}`));
+        }
+        return meta;
+    }
+
+    function renderRole(role) {
+        const el = document.createElement('span');
+        el.className = 'role';
+        el.textContent = role;
+        return el;
+    }
+
+    function renderFlyer(url, title) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'flyer-thumb';
+        button.setAttribute('aria-label', `View flyer for ${title}`);
+
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = '';
+        img.loading = 'lazy';
+        button.appendChild(img);
+
+        button.addEventListener('click', () => openLightbox(url, `${title} flyer`));
+        return button;
+    }
+
+    function renderAction(ticketLink) {
+        const action = document.createElement('div');
+        action.className = 'show-action';
+        if (!ticketLink) return action;
+
+        const link = document.createElement('a');
+        link.href = ticketLink;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.append('Tickets ');
+
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = '→';
+        arrow.setAttribute('aria-hidden', 'true');
+        link.appendChild(arrow);
+
+        action.appendChild(link);
+        return action;
+    }
+
+    // ----------------------------------------------------------------
+    // Small DOM helpers
+    // ----------------------------------------------------------------
+
+    function span(text) {
+        const el = document.createElement('span');
+        el.textContent = text;
+        return el;
     }
 
     function separator() {
-        const s = document.createElement('span');
-        s.className = 'sep';
-        s.textContent = '·';
-        return s;
+        const el = span('·');
+        el.className = 'sep';
+        el.setAttribute('aria-hidden', 'true');
+        return el;
     }
 
-    function openLightbox(url) {
-        const lb = document.createElement('div');
-        lb.className = 'lightbox';
-        lb.addEventListener('click', () => lb.remove());
+    // ================================================================
+    // Lightbox — an accessible modal dialog with focus restore and
+    // Escape-to-close.
+    // ================================================================
+
+    function openLightbox(url, alt) {
+        const lastFocused = document.activeElement;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'lightbox';
+        overlay.tabIndex = -1;
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-label', alt);
+
         const img = document.createElement('img');
         img.src = url;
-        lb.appendChild(img);
-        document.body.appendChild(lb);
+        img.alt = alt;
+        overlay.appendChild(img);
+
+        function close() {
+            overlay.remove();
+            document.removeEventListener('keydown', onKeydown);
+            if (lastFocused instanceof HTMLElement) lastFocused.focus();
+        }
+
+        function onKeydown(event) {
+            if (event.key === 'Escape') close();
+        }
+
+        overlay.addEventListener('click', close);
+        document.addEventListener('keydown', onKeydown);
+        document.body.appendChild(overlay);
+        overlay.focus();
     }
     </script>
 </body>
