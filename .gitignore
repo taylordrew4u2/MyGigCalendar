@@ -17,3 +17,7 @@ xcuserdata/
 *.xcworkspace/xcuserdata/
 *.xcworkspace/xcshareddata/
 .vscode/
+
+# Node / Vercel (docs serverless function)
+node_modules/
+.vercel/

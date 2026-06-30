@@ -56,6 +56,11 @@ enum HTMLExportService {
     /// Generates HTML with full CalendarDisplayOptions support.
     static func generateHTML(shows: [Show], options: CalendarDisplayOptions = CalendarDisplayOptions(),
                              showsWatermark: Bool = true) -> String {
+        // Validate the accent color up front so every downstream interpolation
+        // (header CSS, SVG icon, calendar tints) works from a known-safe value.
+        var options = options
+        options.accentHex = sanitizedHexColor(options.accentHex)
+
         let filtered = options.showPastShows
             ? shows.sorted { $0.dateOrNow < $1.dateOrNow }
             : shows.filter { $0.dateOrNow >= Date() }.sorted { $0.dateOrNow < $1.dateOrNow }
@@ -72,7 +77,7 @@ enum HTMLExportService {
             if trimmed.isEmpty || trimmed == "My" {
                 return "Performance Calendar"
             }
-            return "\(trimmed)'s Shows"
+            return "\(htmlEscaped(trimmed))'s Shows"
         }()
 
         // Group shows by month
@@ -570,8 +575,7 @@ enum HTMLExportService {
                 let dots = (0..<dotCount).map { _ in "<span class=\"cal-dot\"></span>" }.joined()
                 let extra = dayShows.count > 3 ? "<span class=\"cal-dot-extra\">+\(dayShows.count - 3)</span>" : ""
                 dotsHTML = "<div class=\"cal-dots\">\(dots)\(extra)</div>"
-                let titles = dayShows.map { $0.titleOrEmpty }.joined(separator: ", ")
-                    .replacingOccurrences(of: "\"", with: "&quot;")
+                let titles = htmlEscaped(dayShows.map { $0.titleOrEmpty }.joined(separator: ", "))
                 cells.append("<div class=\"\(classes)\" title=\"\(titles)\"><span class=\"cal-day-num\">\(day)</span>\(dotsHTML)</div>")
             } else {
                 cells.append("<div class=\"\(classes)\"><span class=\"cal-day-num\">\(day)</span></div>")
@@ -617,7 +621,7 @@ enum HTMLExportService {
         let formattedDate = df.string(from: show.dateOrNow)
 
         let pastBadge = isPast ? "<span class=\"detail-chip past-chip\">Past</span>" : ""
-        let urgBadge  = !isPast && !show.relativeDateLabel.isEmpty ? "<span class=\"detail-chip urgent-chip\">\(show.relativeDateLabel)</span>" : ""
+        let urgBadge  = !isPast && !show.relativeDateLabel.isEmpty ? "<span class=\"detail-chip urgent-chip\">\(htmlEscaped(show.relativeDateLabel))</span>" : ""
 
         return """
         <div class="detail-card\(isPast ? " detail-past" : "")">
@@ -626,8 +630,8 @@ enum HTMLExportService {
                 <span class="detail-month-abbr">\(monthAbbr(from: show.dateOrNow))</span>
             </div>
             <div class="detail-body">
-                <div class="detail-title">\(show.titleOrEmpty)</div>
-                <div class="detail-venue">📍 \(show.venueOrEmpty)</div>
+                <div class="detail-title">\(htmlEscaped(show.titleOrEmpty))</div>
+                <div class="detail-venue">📍 \(htmlEscaped(show.venueOrEmpty))</div>
                 <div class="detail-datetime">🗓 \(formattedDate)</div>
                 <div class="detail-chips">\(urgBadge)\(pastBadge)</div>
             </div>
@@ -665,6 +669,30 @@ enum HTMLExportService {
             <p>Check back soon for new performances!</p>
         </div>
         """
+    }
+
+    // MARK: - Sanitization
+
+    /// Escapes characters that are significant in HTML so that user-supplied
+    /// values (show titles, venues, performer name) can't break out of the
+    /// surrounding markup or inject elements. `&` must be replaced first.
+    private static func htmlEscaped(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
+    }
+
+    /// Validates a `#RRGGBB` hex color before it is interpolated into CSS/SVG,
+    /// falling back to the default accent if the input is malformed.
+    private static func sanitizedHexColor(_ hex: String) -> String {
+        let trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) != nil {
+            return trimmed
+        }
+        return CalendarDisplayOptions().accentHex
     }
 }
 

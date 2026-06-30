@@ -83,6 +83,43 @@ final class HTMLExportServiceTests: XCTestCase {
         XCTAssertTrue(html.contains("Laugh Factory"))
     }
 
+    // MARK: - HTML Escaping / Sanitization
+
+    func testGenerateHTML_escapesHTMLInShowFields() {
+        let show = Show(context: context)
+        show.title = "Rock & Roll <script>alert(1)</script>"
+        show.venue = "Mike's \"Bar\" & Grill"
+        show.date = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+
+        let html = HTMLExportService.generateHTML(shows: [show], performerName: "")
+        XCTAssertFalse(html.contains("<script>alert(1)</script>"), "Raw script tag must not survive into the output")
+        XCTAssertTrue(html.contains("Rock &amp; Roll"))
+        XCTAssertTrue(html.contains("&lt;script&gt;"))
+    }
+
+    func testGenerateHTML_escapesPerformerName() {
+        let html = HTMLExportService.generateHTML(shows: [], performerName: "<b>Taylor</b>")
+        XCTAssertFalse(html.contains("<b>Taylor</b>"))
+        XCTAssertTrue(html.contains("&lt;b&gt;Taylor&lt;/b&gt;"))
+    }
+
+    func testGenerateHTML_invalidAccentHex_fallsBackToDefault() {
+        var opts = CalendarDisplayOptions()
+        opts.accentHex = "red; } body { background: url(evil) }"
+
+        let html = HTMLExportService.generateHTML(shows: [], options: opts)
+        XCTAssertFalse(html.contains("url(evil)"), "Malformed accent must not be injected into CSS")
+        XCTAssertTrue(html.contains("#9A6544"), "Should fall back to the default accent")
+    }
+
+    func testGenerateHTML_validAccentHex_isUsed() {
+        var opts = CalendarDisplayOptions()
+        opts.accentHex = "#123ABC"
+
+        let html = HTMLExportService.generateHTML(shows: [], options: opts)
+        XCTAssertTrue(html.contains("#123ABC"))
+    }
+
     func testGenerateHTML_withPerformerName_showsInTitle() {
         let html = HTMLExportService.generateHTML(shows: [], performerName: "Taylor")
         XCTAssertTrue(html.contains("Taylor's Shows"))
