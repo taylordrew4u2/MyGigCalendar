@@ -156,7 +156,7 @@ struct ShowEditorView: View {
     private var dateTimePicker: some View {
         HStack(spacing: 12) {
             Image(systemName: "calendar")
-                .font(.system(size: 17))
+                .font(.body)
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 24)
             DatePicker("Date & Time",
@@ -173,7 +173,7 @@ struct ShowEditorView: View {
         VStack(spacing: 0) {
             Toggle(isOn: $addToCalendar) {
                 Label("Add to Calendar", systemImage: "calendar.badge.plus")
-                    .font(.system(size: 17))
+                    .font(.body)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -183,7 +183,7 @@ struct ShowEditorView: View {
                     .padding(.leading, 52)
                 Toggle(isOn: $setReminder) {
                     Label("Reminder (1 hr before)", systemImage: "bell.fill")
-                        .font(.system(size: 17))
+                        .font(.body)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -215,7 +215,7 @@ struct ShowEditorView: View {
                             .tint(.white)
                     }
                     Text(showToEdit == nil ? "Save Show" : "Update Show")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.headline)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
@@ -229,7 +229,7 @@ struct ShowEditorView: View {
 
             if titleEmpty {
                 Text("Enter a show title to save")
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
@@ -261,7 +261,7 @@ struct ShowEditorView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 17))
+                .font(.body)
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 24)
             TextField(placeholder, text: text)
@@ -269,7 +269,7 @@ struct ShowEditorView: View {
                 .textInputAutocapitalization(autocapitalization ? capitalization : .never)
                 .keyboardType(keyboardType)
                 .autocorrectionDisabled(keyboardType == .URL)
-                .font(.system(size: 17))
+                .font(.body)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
