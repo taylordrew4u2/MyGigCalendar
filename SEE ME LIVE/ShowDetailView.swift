@@ -178,6 +178,7 @@ private struct InfoCard: View {
                 .frame(width: 32, height: 32)
                 .background(Color.accentColor.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityHidden(true)
 
             Text(label)
                 .font(.system(size: 11, weight: .bold))

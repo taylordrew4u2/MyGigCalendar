@@ -153,7 +153,6 @@ struct BrandLogoView: View {
         .clipShape(
             RoundedRectangle(cornerRadius: r, style: .continuous)
                 .offset(y: 5 * s)
-                .scale(x: 1, y: 1)
         )
         .offset(y: 5 * s)
     }

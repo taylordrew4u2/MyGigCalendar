@@ -72,6 +72,7 @@ struct OnboardingWalkthroughView: View {
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 84, height: 84)
                 .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .accessibilityHidden(true)
 
             VStack(spacing: 10) {
                 Text(page.title)
