@@ -47,7 +47,7 @@ struct OnboardingWalkthroughView: View {
                         onComplete()
                     } label: {
                         Text(selectedPage == pages.count - 1 ? "Finish" : "Skip")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -76,12 +76,12 @@ struct OnboardingWalkthroughView: View {
 
             VStack(spacing: 10) {
                 Text(page.title)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.title.bold())
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
 
                 Text(page.message)
-                    .font(.system(size: 16))
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
@@ -90,7 +90,7 @@ struct OnboardingWalkthroughView: View {
 
             if selectedPage == pages.count - 1, let calendarStatusText {
                 Text(calendarStatusText)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 18)
@@ -114,10 +114,10 @@ struct OnboardingWalkthroughView: View {
                         ProgressView()
                     } else {
                         Image(systemName: CalendarService.shared.isAuthorized ? "checkmark.circle.fill" : "calendar.badge.plus")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.headline)
                     }
                     Text(CalendarService.shared.isAuthorized ? "Calendar Enabled" : "Enable Calendar")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.headline)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -138,7 +138,7 @@ struct OnboardingWalkthroughView: View {
 
     private func primaryButtonLabel(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 16, weight: .bold))
+            .font(.headline)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
