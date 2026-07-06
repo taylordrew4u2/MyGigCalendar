@@ -792,14 +792,7 @@ struct HomeScreenView: View {
 
     private func deleteShow(_ show: Show) {
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
-        PublicCloudSyncService.shared.markForDelete(show: show)
-        CalendarService.shared.deleteEvent(for: show)
-        viewContext.delete(show)
-        PersistenceController.shared.save(context: viewContext)
-        Task {
-            let bgContext = PersistenceController.shared.container.newBackgroundContext()
-            await PublicCloudSyncService.shared.flushQueue(using: bgContext)
-        }
+        PersistenceController.shared.delete(show, in: viewContext)
         showToastBriefly("Show deleted")
     }
 }
@@ -844,11 +837,29 @@ private struct CalendarDayCell: View {
                 )
             }
             .buttonStyle(.plain)
+            // The colored dot and highlight are visual-only; spell the state
+            // out for VoiceOver instead.
+            .accessibilityLabel(Self.accessibilityLabel(for: day, hasShow: hasShow, isToday: isToday))
+            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         } else {
             Color.clear
                 .frame(height: 38)
+                .accessibilityHidden(true)
         }
     }
+
+    private static func accessibilityLabel(for day: Date, hasShow: Bool, isToday: Bool) -> String {
+        var parts = [dayLabelFormatter.string(from: day)]
+        if isToday { parts.append("today") }
+        if hasShow { parts.append("has a show") }
+        return parts.joined(separator: ", ")
+    }
+
+    private static let dayLabelFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEEE MMMM d")
+        return f
+    }()
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

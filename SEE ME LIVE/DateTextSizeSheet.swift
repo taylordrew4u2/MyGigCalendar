@@ -15,6 +15,8 @@ struct DateTextSizeSheet: View {
 
                 VStack(spacing: 12) {
                     Slider(value: $showDateTextSize, in: range, step: 1)
+                        .accessibilityLabel("Show date text size")
+                        .accessibilityValue("\(Int(showDateTextSize)) point")
                     HStack {
                         Text("Small")
                             .font(.system(size: 13))

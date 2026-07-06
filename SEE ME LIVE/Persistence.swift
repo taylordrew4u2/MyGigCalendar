@@ -83,4 +83,20 @@ struct PersistenceController {
             print("⚠️ Core Data save error: \(nsError), \(nsError.userInfo)")
         }
     }
+
+    // MARK: - Delete Helper
+    /// Removes a show everywhere it lives — the public CloudKit mirror, the
+    /// device calendar, and the local store — then flushes the public-delete
+    /// queue on a background context. UI feedback (haptics, toast, dismissal)
+    /// stays with the caller.
+    func delete(_ show: Show, in context: NSManagedObjectContext) {
+        PublicCloudSyncService.shared.markForDelete(show: show)
+        CalendarService.shared.deleteEvent(for: show)
+        context.delete(show)
+        save(context: context)
+        Task {
+            let bgContext = container.newBackgroundContext()
+            await PublicCloudSyncService.shared.flushQueue(using: bgContext)
+        }
+    }
 }

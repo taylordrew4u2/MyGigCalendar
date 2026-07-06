@@ -29,7 +29,8 @@ struct ShowDetailView: View {
                     // MARK: Title
                     VStack(alignment: .leading, spacing: 8) {
                         Text(show.titleOrEmpty)
-                            .font(.system(size: 28, weight: .bold))
+                            .font(.title)
+                            .fontWeight(.bold)
                             .foregroundStyle(.primary)
                             .tracking(-0.3)
                     }
@@ -69,7 +70,7 @@ struct ShowDetailView: View {
                         } label: {
                             Label("Delete Show", systemImage: "trash")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.red.opacity(0.7))
+                                .foregroundStyle(.red)
                         }
                         .buttonStyle(.plain)
                         .padding(.top, 8)
@@ -133,16 +134,8 @@ struct ShowDetailView: View {
     // MARK: - Delete
 
     private func deleteShow() {
-        let impact = UINotificationFeedbackGenerator()
-        impact.notificationOccurred(.warning)
-        PublicCloudSyncService.shared.markForDelete(show: show)
-        CalendarService.shared.deleteEvent(for: show)
-        viewContext.delete(show)
-        PersistenceController.shared.save(context: viewContext)
-        Task {
-            let bgContext = PersistenceController.shared.container.newBackgroundContext()
-            await PublicCloudSyncService.shared.flushQueue(using: bgContext)
-        }
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        PersistenceController.shared.delete(show, in: viewContext)
         dismiss()
     }
 
