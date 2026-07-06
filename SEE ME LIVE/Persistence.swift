@@ -89,6 +89,11 @@ struct PersistenceController {
     /// device calendar, and the local store — then flushes the public-delete
     /// queue on a background context. UI feedback (haptics, toast, dismissal)
     /// stays with the caller.
+    ///
+    /// `@MainActor` because it calls the main-actor-isolated CloudKit/calendar
+    /// services; its callers are SwiftUI view methods, which are already on the
+    /// main actor.
+    @MainActor
     func delete(_ show: Show, in context: NSManagedObjectContext) {
         PublicCloudSyncService.shared.markForDelete(show: show)
         CalendarService.shared.deleteEvent(for: show)
