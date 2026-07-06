@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - "claude/**"
   pull_request:
     branches:
       - main
@@ -17,7 +16,8 @@ concurrency:
 jobs:
   build-test:
     name: Build & test (iOS Simulator)
-    runs-on: macos-14
+    # macos-15 ships Xcode 16, required to open the project (format 77).
+    runs-on: macos-15
 
     steps:
       - name: Checkout
@@ -35,7 +35,7 @@ jobs:
           xcodebuild test \
             -project "SEE ME LIVE.xcodeproj" \
             -scheme "SEE ME LIVE" \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
