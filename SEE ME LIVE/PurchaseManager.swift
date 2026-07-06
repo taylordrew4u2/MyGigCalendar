@@ -113,7 +113,6 @@ final class PurchaseManager: ObservableObject {
 
             case .userCancelled:
                 isPurchasePending = false
-                break
 
             case .pending:
                 isPurchasePending = true
