@@ -32,10 +32,16 @@ jobs:
       - name: Build and test
         run: |
           set -o pipefail
+          # Skip the one StoreKit test that drives the real Product.purchase()
+          # API: it needs a UI window scene to present the purchase sheet, which
+          # doesn't exist in a headless CI runner (it still runs locally in
+          # Xcode). The other StoreKit tests use SKTestSession.buyProduct and do
+          # run here.
           xcodebuild test \
             -project "SEE ME LIVE.xcodeproj" \
             -scheme "SEE ME LIVE" \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -skip-testing:"SEE ME LIVETests/PurchaseManagerTests/testPurchaseRemoveWatermark_unlocksAndCachesAccess" \
             -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
