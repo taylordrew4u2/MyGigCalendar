@@ -10,7 +10,7 @@ struct DateTextSizeSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Adjust how large show dates appear across the app.")
-                    .font(.system(size: 15))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 VStack(spacing: 12) {
@@ -19,18 +19,18 @@ struct DateTextSizeSheet: View {
                         .accessibilityValue("\(Int(showDateTextSize)) point")
                     HStack {
                         Text("Small")
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .foregroundStyle(.tertiary)
                         Spacer()
                         Text("Large")
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .foregroundStyle(.tertiary)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Preview")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
                     Text("Sat, Mar 15 · 8:00 PM")
