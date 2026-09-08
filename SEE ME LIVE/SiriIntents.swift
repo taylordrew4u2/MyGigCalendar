@@ -13,6 +13,11 @@ struct AddGigIntent: AppIntent {
     static var title: LocalizedStringResource = "Add Gig"
     static var description = IntentDescription("Adds a gig to My Gig Calendar.")
     static var openAppWhenRun = false
+    static var parameterSummary: some ParameterSummary {
+        Summary("Add \(\.$title) on \(\.$date)") {
+            \.$venue
+        }
+    }
 
     @Parameter(title: "Show Title")
     var title: String
@@ -56,6 +61,9 @@ struct OpenAddGigIntent: AppIntent {
     static var title: LocalizedStringResource = "Open Add Gig"
     static var description = IntentDescription("Opens My Gig Calendar so you can add a gig.")
     static var openAppWhenRun = true
+    static var parameterSummary: some ParameterSummary {
+        Summary("Open Add Gig")
+    }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         await AppIntentHandoffCenter.shared.requestAddGig()
@@ -67,6 +75,9 @@ struct ShowUpcomingGigsIntent: AppIntent {
     static var title: LocalizedStringResource = "Show Upcoming Gigs"
     static var description = IntentDescription("Shows the next few gigs in My Gig Calendar.")
     static var openAppWhenRun = false
+    static var parameterSummary: some ParameterSummary {
+        Summary("Show Upcoming Gigs")
+    }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let shows = try await GigIntentStore.upcomingShows(limit: 5)
