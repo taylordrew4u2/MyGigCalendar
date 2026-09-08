@@ -8,6 +8,7 @@
 import SwiftUI
 import CoreData
 import CloudKit
+import AppIntents
 
 @main
 struct SEE_ME_LIVEApp: App {
@@ -18,6 +19,10 @@ struct SEE_ME_LIVEApp: App {
 
     @State private var showSplash = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
+    init() {
+        SeeMeLiveShortcuts.updateAppShortcutParameters()
+    }
 
     var body: some Scene {
         WindowGroup {

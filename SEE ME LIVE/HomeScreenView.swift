@@ -164,12 +164,25 @@ struct HomeScreenView: View {
                 SettingsFAQView()
             }
             .task { await performBackgroundSync() }
+            .onAppear {
+                presentAddGigIfRequested()
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: AppIntentHandoffCenter.addGigRequestedNotification)) { _ in
+                presentAddGigIfRequested()
+            }
             .refreshable {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 await performBackgroundSync()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
         }
+    }
+
+    private func presentAddGigIfRequested() {
+        guard AppIntentHandoffCenter.shared.consumeAddGigRequest() else { return }
+        showToEdit = nil
+        isPresentingEditor = true
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
