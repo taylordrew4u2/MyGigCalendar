@@ -210,8 +210,8 @@ The CloudKit public database mirrors a subset of these fields in a `PublicShow` 
 
 **Clone and open:**
 ```bash
-git clone https://github.com/taylordrew4u2/seemelive.git
-cd seemelive
+git clone https://github.com/taylordrew4u2/seemelive.git MyGigCalendar
+cd MyGigCalendar
 open "SEE ME LIVE.xcodeproj"
 ```
 
@@ -297,31 +297,50 @@ xcodebuild test \
 ## Project Structure
 
 ```
-seemelive/
-├── SEE ME LIVE/                      # iOS app source (~7,850 lines of Swift)
+MyGigCalendar/
+├── SEE ME LIVE.xcodeproj/            # Xcode project, workspace, and shared schemes
+│
+├── SEE ME LIVE/                      # iOS app source
+│   ├── Assets.xcassets/              # App icon, accent colors, backgrounds, splash assets
 │   ├── SEE_ME_LIVEApp.swift          # App entry point, splash → onboarding → home flow
+│   ├── ContentView.swift             # Root SwiftUI view
 │   ├── SplashScreenView.swift        # Animated launch screen (stage lights)
 │   ├── OnboardingWalkthroughView.swift
 │   ├── HomeScreenView.swift          # Month calendar + upcoming list + search
 │   ├── ShowEditorView.swift          # Add/edit show form
 │   ├── ShowDetailView.swift          # Show detail + edit/share/delete actions
 │   ├── ShareImageEditorView.swift    # Flyer studio UI (style, layout, text, colors)
+│   ├── DateTextSizeSheet.swift       # Flyer date text sizing controls
+│   ├── BrandLogoView.swift           # App branding component
 │   ├── ShareImageGenerator.swift     # Core Graphics image rendering engine
 │   ├── CalendarService.swift         # EventKit wrapper
+│   ├── CloudAccountStatus.swift      # iCloud account availability model
 │   ├── PublicCloudSyncService.swift  # Public CloudKit sync + offline retry
 │   ├── Persistence.swift             # Core Data + CloudKit stack
 │   ├── PurchaseManager.swift         # StoreKit 2 purchase state
 │   ├── UserIdentityService.swift     # Stable UUID generation
 │   ├── HTMLExportService.swift       # HTML generation helpers
-│   └── Show+Extensions.swift        # Convenience accessors + date formatters
+│   ├── Show+Extensions.swift         # Convenience accessors + date formatters
+│   ├── SEE_ME_LIVE.xcdatamodeld/     # Core Data model
+│   ├── SEE_ME_LIVE.entitlements      # iCloud, CloudKit, and app entitlements
+│   ├── Info.plist
+│   └── PrivacyInfo.xcprivacy
 │
-├── SEE ME LIVETests/                 # Unit tests (6 files)
+├── SEE ME LIVETests/                 # Unit tests and StoreKit configuration
+│   ├── HTMLExportServiceTests.swift
+│   ├── PersistenceTests.swift
+│   ├── PurchaseManagerTests.swift
+│   ├── ShareImageGeneratorTests.swift
+│   ├── ShowExtensionsTests.swift
+│   ├── UserIdentityServiceTests.swift
+│   └── SEE_ME_LIVE.storekit
 │
 ├── docs/
 │   ├── index.html                    # Public performer calendar (CloudKit JS)
-│   └── calendar.ics.js              # iCalendar feed (Vercel serverless)
+│   └── calendar.ics.js               # iCalendar feed (Vercel serverless)
 │
 ├── screenshots/                      # README demo images
+│   ├── app-icon-appstore.jpg
 │   ├── app-icon.png
 │   ├── web-calendar-demo.png
 │   └── web-calendar-desktop.png

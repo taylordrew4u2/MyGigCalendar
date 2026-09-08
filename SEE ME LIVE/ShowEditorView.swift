@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreData
+import PhotosUI
 
 // MARK: - Show Editor View
 /// A beautifully styled modal form for adding or editing a show.
@@ -25,6 +26,11 @@ struct ShowEditorView: View {
         to: Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: Date())!)!
     @State private var addToCalendar = true
     @State private var setReminder = false
+    @State private var flyerPhotoItem: PhotosPickerItem?
+    @State private var flyerImageData: Data?
+    @State private var flyerPreviewImage: UIImage?
+    @State private var isExtractingFlyerText = false
+    @State private var flyerExtractionMessage: String?
 
     // Alerts
     @State private var showCalendarDeniedAlert = false
@@ -102,8 +108,10 @@ struct ShowEditorView: View {
     // Extracted main content to help the type-checker
     private var content: some View {
         VStack(spacing: 24) {
-            formFields
+            flyerImportSection
                 .padding(.top, 8)
+
+            formFields
 
             calendarToggles
 
@@ -113,6 +121,84 @@ struct ShowEditorView: View {
         }
         .padding(.horizontal, 16)
         .safeAreaPadding(.bottom, 20)
+    }
+
+    private var flyerImportSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                flyerPreview
+
+                VStack(alignment: .leading, spacing: 6) {
+                    PhotosPicker(selection: $flyerPhotoItem, matching: .images) {
+                        Label(flyerImageData == nil ? "Import Flyer" : "Change Flyer",
+                              systemImage: "photo.badge.plus")
+                            .font(.headline)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    if isExtractingFlyerText {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Reading flyer text...")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let flyerExtractionMessage {
+                        Text(flyerExtractionMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            if flyerImageData != nil {
+                Button(role: .destructive) {
+                    flyerPhotoItem = nil
+                    flyerImageData = nil
+                    flyerPreviewImage = nil
+                    flyerExtractionMessage = nil
+                } label: {
+                    Label("Remove Flyer", systemImage: "trash")
+                        .font(.footnote.weight(.semibold))
+                }
+            }
+        }
+        .padding(16)
+        .background(Color("CardBackground"))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.14), lineWidth: 1)
+        )
+        .task(id: flyerPhotoItem) {
+            await importFlyer(from: flyerPhotoItem)
+        }
+    }
+
+    private var flyerPreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.secondary.opacity(0.12))
+
+            if let flyerPreviewImage {
+                Image(uiImage: flyerPreviewImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "doc.text.image")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 72, height: 96)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.18), lineWidth: 1)
+        )
+        .accessibilityLabel(flyerPreviewImage == nil ? "No flyer selected" : "Selected flyer")
     }
 
     // Extracted form fields
@@ -241,10 +327,11 @@ struct ShowEditorView: View {
         if let show = showToEdit {
             // Editing: check if anything changed
             return trimmedTitle != show.titleOrEmpty ||
-                   venue != show.venueOrEmpty
+                   venue != show.venueOrEmpty ||
+                   flyerImageData != show.flyerImageData
         }
         // New show: has the user typed anything?
-        return !trimmedTitle.isEmpty || !venue.isEmpty
+        return !trimmedTitle.isEmpty || !venue.isEmpty || flyerImageData != nil
     }
 
     // MARK: - Editor Field
@@ -284,6 +371,57 @@ struct ShowEditorView: View {
         date = show.dateOrNow
         addToCalendar = show.addToCalendar
         setReminder = show.setReminder
+        flyerImageData = show.flyerImageData
+        if let flyerImageData {
+            flyerPreviewImage = UIImage(data: flyerImageData)
+        }
+    }
+
+    // MARK: - Flyer Import
+
+    @MainActor
+    private func importFlyer(from item: PhotosPickerItem?) async {
+        guard let item else { return }
+
+        isExtractingFlyerText = true
+        flyerExtractionMessage = nil
+        defer { isExtractingFlyerText = false }
+
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                throw FlyerTextExtractionError.invalidImage
+            }
+
+            let storedData = image.jpegData(compressionQuality: 0.82) ?? data
+            flyerImageData = storedData
+            flyerPreviewImage = UIImage(data: storedData)
+
+            let details = try await FlyerTextExtractionService.extractShowDetails(from: storedData)
+            applyExtractedDetails(details)
+            flyerExtractionMessage = details.hasValues
+                ? "Flyer details filled in. Review before saving."
+                : "Flyer imported, but no show details were found."
+        } catch {
+            flyerExtractionMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func applyExtractedDetails(_ details: FlyerShowDetails) {
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let extractedTitle = details.title {
+            title = extractedTitle
+        }
+
+        if venue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let extractedVenue = details.venue {
+            venue = extractedVenue
+        }
+
+        if let extractedDate = details.date {
+            date = extractedDate
+        }
     }
 
     // MARK: - Save
@@ -313,8 +451,8 @@ struct ShowEditorView: View {
             show.price = 0
             show.ticketLink = ""
             show.notes = ""
-            show.flyerImageData = nil
         }
+        show.flyerImageData = flyerImageData
         show.addToCalendar = addToCalendar
         show.setReminder = setReminder
         show.userID = userID
