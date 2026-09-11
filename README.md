@@ -304,7 +304,7 @@ MyGigCalendar/
 │   ├── Assets.xcassets/              # App icon, accent colors, backgrounds, splash assets
 │   ├── SEE_ME_LIVEApp.swift          # App entry point, splash → onboarding → home flow
 │   ├── ContentView.swift             # Root SwiftUI view
-│   ├── SplashScreenView.swift        # Animated launch screen (stage lights)
+│   ├── SplashScreenView.swift        # Animated calendar launch screen
 │   ├── OnboardingWalkthroughView.swift
 │   ├── HomeScreenView.swift          # Month calendar + upcoming list + search
 │   ├── ShowEditorView.swift          # Add/edit show form
