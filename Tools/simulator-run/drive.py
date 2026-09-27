@@ -3,11 +3,8 @@
 
 Usage: drive.py <simulator-udid> <output-dir>
 
-Each screenshot is saved as PNG in <output-dir> and also printed to stdout as
-a small base64 JPEG between ===SHOT <name>=== / ===END=== markers so it can be
-recovered from the CI log.
+Each screenshot is saved in <output-dir> as a full PNG and a small JPEG.
 """
-import base64
 import json
 import subprocess
 import sys
@@ -24,11 +21,20 @@ def run(*args, check=True):
 
 
 def idb(*args):
-    return run("idb", *args, "--udid", UDID)
+    """Runs an idb command, retrying briefly; returns stdout or "" on failure."""
+    for attempt in range(3):
+        result = run("idb", *args, "--udid", UDID, check=False)
+        if result.returncode == 0:
+            return result.stdout
+        print(f"!! idb {' '.join(args)} failed ({result.returncode}): {result.stderr.strip()[-400:]}")
+        time.sleep(1.5)
+    return ""
 
 
 def elements():
-    out = idb("ui", "describe-all", "--json").stdout
+    out = idb("ui", "describe-all", "--json")
+    if not out.strip():
+        return []
     try:
         return json.loads(out)
     except json.JSONDecodeError:
@@ -69,10 +75,7 @@ def shot(name):
     run("xcrun", "simctl", "io", UDID, "screenshot", str(png))
     run("sips", "-Z", "560", "-s", "format", "jpeg", "-s", "formatOptions", "45",
         str(png), "--out", str(jpg))
-    print(f"   labels: {[l for l in labels() if l][:25]}")
-    print(f"===SHOT {name}===")
-    print(base64.encodebytes(jpg.read_bytes()).decode(), end="")
-    print("===END===", flush=True)
+    print(f"[{name}] labels: {[l for l in labels() if l][:25]}", flush=True)
 
 
 def launch():

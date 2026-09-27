@@ -8,6 +8,9 @@ on:
     branches:
       - claude/keen-knuth-10mk57
 
+permissions:
+  contents: write
+
 jobs:
   simulator-run:
     name: Run app in iOS Simulator
@@ -75,6 +78,20 @@ jobs:
 
       - name: Drive app
         run: python3 Tools/simulator-run/drive.py "$UDID" screenshots
+
+      - name: Publish screenshots to the simulator-screenshots branch
+        if: always()
+        run: |
+          [ -d screenshots ] || exit 0
+          DEST="$RUNNER_TEMP/shots-branch"
+          mkdir -p "$DEST" && cd "$DEST"
+          git init -q -b simulator-screenshots
+          cp "$GITHUB_WORKSPACE"/screenshots/*.jpg . 2>/dev/null || true
+          echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID (commit $GITHUB_SHA)" > README.md
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
+            commit -qm "Simulator screenshots for run $GITHUB_RUN_ID"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/$GITHUB_REPOSITORY.git" simulator-screenshots
 
       - name: Upload screenshots
         if: always()
