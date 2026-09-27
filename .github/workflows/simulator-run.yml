@@ -1,0 +1,116 @@
+name: Simulator run
+
+# Builds the app, boots an iPhone Simulator, and drives the main flows with
+# idb, saving screenshots. Run it from the Actions tab.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/keen-knuth-10mk57
+
+permissions:
+  contents: write
+
+jobs:
+  simulator-run:
+    name: Run app in iOS Simulator
+    runs-on: macos-15
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install idb
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Prebuilt companion: the Homebrew formula refuses to install on runners
+          # whose Xcode it doesn't recognize.
+          # Find the newest release that ships a companion archive.
+          ASSET=""
+          for TAG in $(gh release list --repo facebook/idb --limit 15 --json tagName --jq '.[].tagName'); do
+            NAMES=$(gh release view "$TAG" --repo facebook/idb --json assets --jq '.assets[].name')
+            echo "$TAG: $(echo $NAMES)"
+            ASSET=$(echo "$NAMES" | grep -i 'companion' | grep -i 'tar.gz' | head -n 1 || true)
+            if [ -n "$ASSET" ]; then break; fi
+          done
+          test -n "$ASSET"
+          gh release download "$TAG" --repo facebook/idb --pattern "$ASSET" --dir "$RUNNER_TEMP"
+          mkdir -p "$RUNNER_TEMP/idb-companion"
+          tar -xzf "$RUNNER_TEMP/$ASSET" -C "$RUNNER_TEMP/idb-companion"
+          COMPANION=$(find "$RUNNER_TEMP/idb-companion" -type f -name idb_companion | head -n 1)
+          test -n "$COMPANION"
+          echo "$(dirname "$COMPANION")" >> "$GITHUB_PATH"
+          pip3 install --break-system-packages fb-idb || pip3 install fb-idb
+
+      - name: Build for Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "SEE ME LIVE.xcodeproj" \
+            -scheme "SEE ME LIVE" \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -derivedDataPath build \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= | tail -n 30
+          # Ad-hoc signing embeds the iCloud entitlements; without them
+          # CKContainer.default() traps as soon as sync starts.
+          codesign -d --entitlements - "build/Build/Products/Debug-iphonesimulator/SEE ME LIVE.app" || true
+
+      - name: Boot Simulator and install app
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          for runtime, items in sorted(devices.items(), reverse=True):
+              if "iOS" in runtime:
+                  for d in items:
+                      if d["name"] == "iPhone 16":
+                          print(d["udid"]); sys.exit()
+          ')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "build/Build/Products/Debug-iphonesimulator/SEE ME LIVE.app"
+          xcrun simctl privacy "$UDID" grant calendar comedy.SEE-ME-LIVE || true
+          idb_companion --udid "$UDID" --grpc-port 10882 > "$RUNNER_TEMP/companion.log" 2>&1 &
+          sleep 5
+          idb connect localhost 10882
+          idb list-targets
+
+      - name: Drive app
+        run: python3 Tools/simulator-run/drive.py "$UDID" screenshots
+
+      - name: Show crash reports
+        if: always()
+        run: |
+          ls -t ~/Library/Logs/DiagnosticReports/ 2>/dev/null | grep -i "SEE ME LIVE" | head -n 3 | while read -r f; do
+            echo "=== $f"
+            head -c 6000 ~/Library/Logs/DiagnosticReports/"$f"
+            echo
+          done
+
+      - name: Publish screenshots to the simulator-screenshots branch
+        if: always()
+        run: |
+          [ -d screenshots ] || exit 0
+          DEST="$RUNNER_TEMP/shots-branch"
+          mkdir -p "$DEST" && cd "$DEST"
+          git init -q -b simulator-screenshots
+          cp "$GITHUB_WORKSPACE"/screenshots/*.jpg . 2>/dev/null || true
+          echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID (commit $GITHUB_SHA)" > README.md
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
+            commit -qm "Simulator screenshots for run $GITHUB_RUN_ID"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/$GITHUB_REPOSITORY.git" simulator-screenshots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-screenshots
+          path: screenshots
+          if-no-files-found: ignore
