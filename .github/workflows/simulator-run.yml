@@ -4,9 +4,6 @@ name: Simulator run
 # idb, saving screenshots. Run it from the Actions tab.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - claude/keen-knuth-10mk57
 
 permissions:
   contents: write
