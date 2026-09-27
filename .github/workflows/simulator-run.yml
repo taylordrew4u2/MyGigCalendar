@@ -24,9 +24,18 @@ jobs:
         run: |
           # Prebuilt companion: the Homebrew formula refuses to install on runners
           # whose Xcode it doesn't recognize.
-          gh release download --repo facebook/idb --pattern 'idb-companion.universal.tar.gz' --dir "$RUNNER_TEMP"
+          # Find the newest release that ships a companion archive.
+          ASSET=""
+          for TAG in $(gh release list --repo facebook/idb --limit 15 --json tagName --jq '.[].tagName'); do
+            NAMES=$(gh release view "$TAG" --repo facebook/idb --json assets --jq '.assets[].name')
+            echo "$TAG: $(echo $NAMES)"
+            ASSET=$(echo "$NAMES" | grep -i 'companion' | grep -i 'tar.gz' | head -n 1 || true)
+            if [ -n "$ASSET" ]; then break; fi
+          done
+          test -n "$ASSET"
+          gh release download "$TAG" --repo facebook/idb --pattern "$ASSET" --dir "$RUNNER_TEMP"
           mkdir -p "$RUNNER_TEMP/idb-companion"
-          tar -xzf "$RUNNER_TEMP/idb-companion.universal.tar.gz" -C "$RUNNER_TEMP/idb-companion"
+          tar -xzf "$RUNNER_TEMP/$ASSET" -C "$RUNNER_TEMP/idb-companion"
           COMPANION=$(find "$RUNNER_TEMP/idb-companion" -type f -name idb_companion | head -n 1)
           test -n "$COMPANION"
           echo "$(dirname "$COMPANION")" >> "$GITHUB_PATH"
