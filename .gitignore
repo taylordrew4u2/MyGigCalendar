@@ -21,3 +21,6 @@ xcuserdata/
 # Node / Vercel (docs serverless function)
 node_modules/
 .vercel/
+
+# Python bytecode
+__pycache__/
