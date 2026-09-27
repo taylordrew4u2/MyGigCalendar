@@ -19,11 +19,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install idb
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          brew tap facebook/fb
-          # Newer Homebrew refuses formulas from third-party taps until trusted.
-          brew trust facebook/fb || true
-          brew install idb-companion
+          # Prebuilt companion: the Homebrew formula refuses to install on runners
+          # whose Xcode it doesn't recognize.
+          gh release download --repo facebook/idb --pattern 'idb-companion.universal.tar.gz' --dir "$RUNNER_TEMP"
+          mkdir -p "$RUNNER_TEMP/idb-companion"
+          tar -xzf "$RUNNER_TEMP/idb-companion.universal.tar.gz" -C "$RUNNER_TEMP/idb-companion"
+          COMPANION=$(find "$RUNNER_TEMP/idb-companion" -type f -name idb_companion | head -n 1)
+          test -n "$COMPANION"
+          echo "$(dirname "$COMPANION")" >> "$GITHUB_PATH"
           pip3 install --break-system-packages fb-idb || pip3 install fb-idb
 
       - name: Build for Simulator
@@ -53,7 +59,10 @@ jobs:
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl install "$UDID" "build/Build/Products/Debug-iphonesimulator/SEE ME LIVE.app"
           xcrun simctl privacy "$UDID" grant calendar comedy.SEE-ME-LIVE || true
-          idb connect "$UDID"
+          idb_companion --udid "$UDID" --grpc-port 10882 > "$RUNNER_TEMP/companion.log" 2>&1 &
+          sleep 5
+          idb connect localhost 10882
+          idb list-targets
 
       - name: Drive app
         run: python3 Tools/simulator-run/drive.py "$UDID" screenshots
