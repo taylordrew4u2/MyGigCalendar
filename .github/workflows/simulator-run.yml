@@ -1,0 +1,65 @@
+name: Simulator run
+
+# Builds the app, boots an iPhone Simulator, and drives the main flows with
+# idb, saving screenshots. Run it from the Actions tab.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/keen-knuth-10mk57
+
+jobs:
+  simulator-run:
+    name: Run app in iOS Simulator
+    runs-on: macos-15
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install idb
+        run: |
+          brew tap facebook/fb
+          brew install idb-companion
+          pip3 install --break-system-packages fb-idb || pip3 install fb-idb
+
+      - name: Build for Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "SEE ME LIVE.xcodeproj" \
+            -scheme "SEE ME LIVE" \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO | tail -n 30
+
+      - name: Boot Simulator and install app
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          for runtime, items in sorted(devices.items(), reverse=True):
+              if "iOS" in runtime:
+                  for d in items:
+                      if d["name"] == "iPhone 16":
+                          print(d["udid"]); sys.exit()
+          ')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "build/Build/Products/Debug-iphonesimulator/SEE ME LIVE.app"
+          xcrun simctl privacy "$UDID" grant calendar comedy.SEE-ME-LIVE || true
+          idb connect "$UDID"
+
+      - name: Drive app
+        run: python3 Tools/simulator-run/drive.py "$UDID" screenshots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-screenshots
+          path: screenshots
+          if-no-files-found: ignore
