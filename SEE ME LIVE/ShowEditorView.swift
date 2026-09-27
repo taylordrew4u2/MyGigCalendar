@@ -18,12 +18,13 @@ struct ShowEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     let showToEdit: Show?
+    /// Called once, only after the show was saved locally. `true` for a new show.
+    var onSaved: ((Bool) -> Void)? = nil
 
     // MARK: Form State
     @State private var title = ""
     @State private var venue = ""
-    @State private var date = Calendar.current.date(byAdding: .day, value: 7,
-        to: Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: Date())!)!
+    @State private var date = ShowDraft.newShow().date
     @State private var addToCalendar = true
     @State private var setReminder = false
     @State private var flyerPhotoItem: PhotosPickerItem?
@@ -31,11 +32,17 @@ struct ShowEditorView: View {
     @State private var flyerPreviewImage: UIImage?
     @State private var isExtractingFlyerText = false
     @State private var flyerExtractionMessage: String?
+    @State private var flyerImport = FlyerImportGeneration()
+
+    /// The form as first shown; `nil` until the first appearance.
+    @State private var baseline: ShowDraft?
 
     // Alerts
-    @State private var showCalendarDeniedAlert = false
     @State private var showDiscardConfirmation = false
     @State private var isSaving = false
+    @State private var didSave = false
+    @State private var saveErrorMessage: String?
+    @State private var postSaveNotice: PostSaveNotice?
 
     @FocusState private var focusedField: EditorField?
 
@@ -43,6 +50,14 @@ struct ShowEditorView: View {
 
     private enum EditorField {
         case title, venue
+    }
+
+    /// Shown after a successful local save when Calendar needs attention.
+    /// Dismissing it closes the editor.
+    private struct PostSaveNotice {
+        let title: String
+        let message: String
+        let offersSettings: Bool
     }
 
     // MARK: - Body
@@ -65,6 +80,7 @@ struct ShowEditorView: View {
                             dismiss()
                         }
                     }
+                    .disabled(isSaving || postSaveNotice != nil)
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -73,7 +89,11 @@ struct ShowEditorView: View {
                 }
             }
             .onAppear {
-                populateFromExisting()
+                // Snapshot once; a repeat appearance must not reset the form.
+                guard baseline == nil else { return }
+                let initial = initialDraft()
+                apply(initial)
+                baseline = initial
                 // Auto-focus the title field for new shows
                 if showToEdit == nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
@@ -81,16 +101,29 @@ struct ShowEditorView: View {
                     }
                 }
             }
-            .alert("Calendar Access Denied",
-                   isPresented: $showCalendarDeniedAlert) {
-                Button("Open Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
-                }
+            .alert("Couldn't Save Gig",
+                   isPresented: Binding(
+                    get: { saveErrorMessage != nil },
+                    set: { if !$0 { saveErrorMessage = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("My Gig Calendar needs calendar access to add your gigs. Please enable it in Settings.")
+                Text(saveErrorMessage ?? "")
+            }
+            .alert(postSaveNotice?.title ?? "",
+                   isPresented: Binding(
+                    get: { postSaveNotice != nil },
+                    set: { _ in })) {
+                if postSaveNotice?.offersSettings == true {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                        finishAfterNotice()
+                    }
+                }
+                Button("OK", role: .cancel) { finishAfterNotice() }
+            } message: {
+                Text(postSaveNotice?.message ?? "")
             }
             .confirmationDialog("Discard Changes?",
                                 isPresented: $showDiscardConfirmation,
@@ -102,7 +135,7 @@ struct ShowEditorView: View {
             }
         }
         .presentationDetents([.large])
-        .interactiveDismissDisabled(isSaving)
+        .interactiveDismissDisabled(blocksInteractiveDismiss)
     }
 
     // Extracted main content to help the type-checker
@@ -153,8 +186,11 @@ struct ShowEditorView: View {
                 Spacer(minLength: 0)
             }
 
-            if flyerImageData != nil {
+            if flyerImageData != nil || isExtractingFlyerText {
                 Button(role: .destructive) {
+                    // Any import still running must not apply its results.
+                    flyerImport.invalidate()
+                    isExtractingFlyerText = false
                     flyerPhotoItem = nil
                     flyerImageData = nil
                     flyerPreviewImage = nil
@@ -287,12 +323,10 @@ struct ShowEditorView: View {
 
     // Extracted save button
     private var saveButton: some View {
-        let titleEmpty = title.trimmingCharacters(in: .whitespaces).isEmpty
-        let isDisabled = titleEmpty || isSaving
+        let titleEmpty = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let isDisabled = titleEmpty || isSaving || didSave || isExtractingFlyerText
         return VStack(spacing: 8) {
             Button {
-                let impact = UINotificationFeedbackGenerator()
-                impact.notificationOccurred(.success)
                 Task { await saveShow() }
             } label: {
                 HStack(spacing: 8) {
@@ -321,17 +355,25 @@ struct ShowEditorView: View {
         }
     }
 
-    /// Whether the form has unsaved changes worth warning about.
+    /// Every editable field as one value.
+    private var currentDraft: ShowDraft {
+        ShowDraft(title: title,
+                  venue: venue,
+                  date: date,
+                  addToCalendar: addToCalendar,
+                  setReminder: setReminder,
+                  flyerImageData: flyerImageData)
+    }
+
+    /// Whether the form differs from what it showed when it opened.
     private var hasUnsavedChanges: Bool {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
-        if let show = showToEdit {
-            // Editing: check if anything changed
-            return trimmedTitle != show.titleOrEmpty ||
-                   venue != show.venueOrEmpty ||
-                   flyerImageData != show.flyerImageData
-        }
-        // New show: has the user typed anything?
-        return !trimmedTitle.isEmpty || !venue.isEmpty || flyerImageData != nil
+        guard let baseline, !didSave else { return false }
+        return currentDraft.hasChanges(from: baseline)
+    }
+
+    /// Swipe-to-dismiss would silently drop work or skip a result notice.
+    private var blocksInteractiveDismiss: Bool {
+        hasUnsavedChanges || isExtractingFlyerText || isSaving || postSaveNotice != nil
     }
 
     // MARK: - Editor Field
@@ -364,17 +406,25 @@ struct ShowEditorView: View {
 
     // MARK: - Populate (Edit Mode)
 
-    private func populateFromExisting() {
-        guard let show = showToEdit else { return }
-        title = show.titleOrEmpty
-        venue = show.venueOrEmpty
-        date = show.dateOrNow
-        addToCalendar = show.addToCalendar
-        setReminder = show.setReminder
-        flyerImageData = show.flyerImageData
-        if let flyerImageData {
-            flyerPreviewImage = UIImage(data: flyerImageData)
-        }
+    /// The saved show's values, or the form's defaults for a new show.
+    private func initialDraft() -> ShowDraft {
+        guard let show = showToEdit else { return currentDraft }
+        return ShowDraft(title: show.titleOrEmpty,
+                         venue: show.venueOrEmpty,
+                         date: show.dateOrNow,
+                         addToCalendar: show.addToCalendar,
+                         setReminder: show.setReminder,
+                         flyerImageData: show.flyerImageData)
+    }
+
+    private func apply(_ draft: ShowDraft) {
+        title = draft.title
+        venue = draft.venue
+        date = draft.date
+        addToCalendar = draft.addToCalendar
+        setReminder = draft.setReminder
+        flyerImageData = draft.flyerImageData
+        flyerPreviewImage = draft.flyerImageData.flatMap { UIImage(data: $0) }
     }
 
     // MARK: - Flyer Import
@@ -383,44 +433,46 @@ struct ShowEditorView: View {
     private func importFlyer(from item: PhotosPickerItem?) async {
         guard let item else { return }
 
+        let token = flyerImport.begin()
+        let dateAtImportStart = date
+        /// False once this import was cancelled, replaced, or removed.
+        func isStillCurrent() -> Bool {
+            !Task.isCancelled && flyerImport.isCurrent(token)
+        }
+
         isExtractingFlyerText = true
         flyerExtractionMessage = nil
-        defer { isExtractingFlyerText = false }
+        defer {
+            if flyerImport.isCurrent(token) { isExtractingFlyerText = false }
+        }
 
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
                   let image = UIImage(data: data) else {
                 throw FlyerTextExtractionError.invalidImage
             }
+            guard isStillCurrent() else { return }
 
             let storedData = image.jpegData(compressionQuality: 0.82) ?? data
             flyerImageData = storedData
             flyerPreviewImage = UIImage(data: storedData)
 
             let details = try await FlyerTextExtractionService.extractShowDetails(from: storedData)
-            applyExtractedDetails(details)
+            guard isStillCurrent() else { return }
+
+            let updated = currentDraft.applyingExtracted(title: details.title,
+                                                         venue: details.venue,
+                                                         date: details.date,
+                                                         dateAtImportStart: dateAtImportStart)
+            title = updated.title
+            venue = updated.venue
+            date = updated.date
             flyerExtractionMessage = details.hasValues
                 ? "Flyer details filled in. Review before saving."
                 : "Flyer imported, but no show details were found."
         } catch {
+            guard isStillCurrent() else { return }
             flyerExtractionMessage = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func applyExtractedDetails(_ details: FlyerShowDetails) {
-        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           let extractedTitle = details.title {
-            title = extractedTitle
-        }
-
-        if venue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           let extractedVenue = details.venue {
-            venue = extractedVenue
-        }
-
-        if let extractedDate = details.date {
-            date = extractedDate
         }
     }
 
@@ -428,81 +480,127 @@ struct ShowEditorView: View {
 
     @MainActor
     private func saveShow() async {
+        guard !isSaving, !didSave else { return }
         isSaving = true
         defer { isSaving = false }
 
-        let isNew = (showToEdit == nil)
-        let show: Show
-        if let existing = showToEdit {
-            show = existing
-        } else {
-            show = Show(context: viewContext)
-        }
-        let now = Date()
+        let draft = currentDraft
+        let container = PersistenceController.shared.container
+        let context = ShowEditorPersistence.makeContext(for: container)
 
-        show.title = title.trimmingCharacters(in: .whitespaces)
-        show.venue = venue.trimmingCharacters(in: .whitespaces)
-        show.date = date
-        // Legacy fields (role/price/ticketLink/notes/flyerImageData) are no longer
-        // editable in the UI. Initialize them only for brand-new shows so that
-        // editing an existing show never destroys data saved by older versions.
-        if isNew {
-            show.role = ""
-            show.price = 0
-            show.ticketLink = ""
-            show.notes = ""
-        }
-        show.flyerImageData = flyerImageData
-        show.addToCalendar = addToCalendar
-        show.setReminder = setReminder
-        show.userID = userID
-        show.updatedAt = now
-        if isNew {
-            show.createdAt = now
-        }
-
-        // Calendar integration.
-        if addToCalendar {
-            if CalendarService.shared.isAuthorized {
-                let eventID = CalendarService.shared.createOrUpdateEvent(for: show)
-                show.calendarEventID = eventID
-            } else {
-                let granted = await CalendarService.shared.requestAccess()
-                if granted {
-                    let eventID = CalendarService.shared.createOrUpdateEvent(for: show)
-                    show.calendarEventID = eventID
-                } else {
-                    showCalendarDeniedAlert = true
-                }
-            }
-        } else {
-            if show.calendarEventID != nil {
-                CalendarService.shared.deleteEvent(for: show)
-                show.calendarEventID = nil
-            }
-        }
-
-        show.needsPublicSync = true
-
-        // Save Core Data synchronously to ensure persistence before dismissing.
+        // 1. Local save first. On failure keep the draft and stop here, so
+        //    nothing is written to Calendar or the public database.
+        let result: ShowEditorPersistence.SaveResult
         do {
-            if viewContext.hasChanges {
-                try viewContext.save()
-            }
+            result = try ShowEditorPersistence.save(draft,
+                                                    editing: showToEdit?.objectID,
+                                                    userID: userID,
+                                                    in: context)
         } catch {
             print("⚠️ Core Data save error: \(error)")
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            saveErrorMessage = error.localizedDescription
+            return
         }
 
-        // Dismiss immediately after local save so the UI updates.
-        dismiss()
+        didSave = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        reportSaved(isNew: result.isNew)
 
-        // Sync to CloudKit in the background (non-blocking).
-        let objectID = show.objectID
+        // 2. Calendar, only after the gig is safely stored.
+        let notice = await syncCalendar(for: draft, result: result, context: context)
+
+        // 3. Public sync in the background (non-blocking).
+        let objectID = result.objectID
         Task.detached {
             let bgContext = PersistenceController.shared.container.newBackgroundContext()
             bgContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
             await PublicCloudSyncService.shared.saveOrUpdate(objectID: objectID, in: bgContext)
         }
+
+        if let notice {
+            postSaveNotice = notice
+        } else {
+            dismiss()
+        }
+    }
+
+    /// Creates, updates, or removes the calendar event for a saved show.
+    /// A failed EventKit call keeps the stored identifier and returns a notice.
+    @MainActor
+    private func syncCalendar(for draft: ShowDraft,
+                              result: ShowEditorPersistence.SaveResult,
+                              context: NSManagedObjectContext) async -> PostSaveNotice? {
+        let calendar = CalendarService.shared
+        let existingID = result.calendarEventID
+
+        guard draft.addToCalendar else {
+            guard let existingID else { return nil }
+            do {
+                try calendar.removeEvent(identifier: existingID)
+            } catch {
+                print("⚠️ Failed to delete calendar event: \(error)")
+                return calendarFailureNotice(
+                    "Your gig was saved, but its Calendar event couldn't be removed. Remove it in the Calendar app.")
+            }
+            return storeEventID(nil, for: result.objectID, context: context)
+        }
+
+        var authorized = calendar.isAuthorized
+        if !authorized {
+            authorized = await calendar.requestAccess()
+        }
+        guard authorized else {
+            return PostSaveNotice(
+                title: "Calendar Access Denied",
+                message: "Your gig was saved, but My Gig Calendar needs calendar access to add it to Calendar. Please enable it in Settings.",
+                offersSettings: true)
+        }
+
+        let eventID: String
+        do {
+            eventID = try calendar.saveEvent(existingIdentifier: existingID,
+                                             title: draft.trimmedTitle,
+                                             venue: draft.trimmedVenue,
+                                             date: draft.date,
+                                             setReminder: draft.setReminder)
+        } catch {
+            print("⚠️ Failed to save calendar event: \(error)")
+            return calendarFailureNotice(
+                "Your gig was saved, but Calendar couldn't be updated. Edit the gig later to try again.")
+        }
+        return storeEventID(eventID, for: result.objectID, context: context)
+    }
+
+    @MainActor
+    private func storeEventID(_ eventID: String?,
+                              for objectID: NSManagedObjectID,
+                              context: NSManagedObjectContext) -> PostSaveNotice? {
+        do {
+            try ShowEditorPersistence.setCalendarEventID(eventID, for: objectID, in: context)
+            return nil
+        } catch {
+            print("⚠️ Failed to store calendar event ID: \(error)")
+            return calendarFailureNotice(
+                "Your gig and Calendar were updated, but the link between them couldn't be saved. Check the Calendar app before editing this gig again to avoid a duplicate event.")
+        }
+    }
+
+    private func calendarFailureNotice(_ message: String) -> PostSaveNotice {
+        PostSaveNotice(title: "Calendar Not Updated", message: message, offersSettings: false)
+    }
+
+    /// Reports success to the presenter at most once.
+    @MainActor
+    private func reportSaved(isNew: Bool) {
+        guard let onSaved else { return }
+        onSaved(isNew)
+    }
+
+    @MainActor
+    private func finishAfterNotice() {
+        postSaveNotice = nil
+        dismiss()
     }
 }
 
