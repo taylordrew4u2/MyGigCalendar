@@ -69,13 +69,20 @@ def tap(*needles, kind=None, wait=1.2):
     return True
 
 
+SPRINGBOARD_LABELS = {"Safari", "Messages", "Fitness"}
+problems = []
+
+
 def shot(name):
     png = OUT / f"{name}.png"
     jpg = OUT / f"{name}.jpg"
     run("xcrun", "simctl", "io", UDID, "screenshot", str(png))
     run("sips", "-Z", "560", "-s", "format", "jpeg", "-s", "formatOptions", "45",
         str(png), "--out", str(jpg))
-    print(f"[{name}] labels: {[l for l in labels() if l][:25]}", flush=True)
+    current = [l for l in labels() if l]
+    print(f"[{name}] labels: {current[:25]}", flush=True)
+    if SPRINGBOARD_LABELS.issubset(current):
+        problems.append(f"{name}: app is not in the foreground (crashed or exited)")
 
 
 def launch():
@@ -120,3 +127,8 @@ shot("09-home-with-gig")
 # 5. Open the saved gig.
 tap("Open Mic Night", wait=1.5)
 shot("10-detail")
+
+if problems:
+    print("\nPROBLEMS:\n" + "\n".join(problems))
+    sys.exit(1)
+print("\nAll steps ran with the app in the foreground.")

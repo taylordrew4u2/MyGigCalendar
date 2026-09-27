@@ -52,8 +52,13 @@ jobs:
             -scheme "SEE ME LIVE" \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO | tail -n 30
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= | tail -n 30
+          # Ad-hoc signing embeds the iCloud entitlements; without them
+          # CKContainer.default() traps as soon as sync starts.
+          codesign -d --entitlements - "build/Build/Products/Debug-iphonesimulator/SEE ME LIVE.app" || true
 
       - name: Boot Simulator and install app
         run: |
@@ -78,6 +83,15 @@ jobs:
 
       - name: Drive app
         run: python3 Tools/simulator-run/drive.py "$UDID" screenshots
+
+      - name: Show crash reports
+        if: always()
+        run: |
+          ls -t ~/Library/Logs/DiagnosticReports/ 2>/dev/null | grep -i "SEE ME LIVE" | head -n 3 | while read -r f; do
+            echo "=== $f"
+            head -c 6000 ~/Library/Logs/DiagnosticReports/"$f"
+            echo
+          done
 
       - name: Publish screenshots to the simulator-screenshots branch
         if: always()
