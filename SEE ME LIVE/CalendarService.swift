@@ -47,11 +47,31 @@ final class CalendarService {
     /// - Returns: The EKEvent identifier, or nil on failure.
     @discardableResult
     func createOrUpdateEvent(for show: Show) -> String? {
-        guard isAuthorized else { return nil }
+        do {
+            return try saveEvent(existingIdentifier: show.calendarEventID,
+                                 title: show.title ?? "Show",
+                                 venue: show.venue,
+                                 date: show.date ?? Date(),
+                                 setReminder: show.setReminder)
+        } catch {
+            print("⚠️ Failed to save calendar event: \(error)")
+            return nil
+        }
+    }
+
+    /// Creates or updates a calendar event from plain values.
+    /// - Returns: The saved event's identifier.
+    /// - Throws: If calendar access is missing or EventKit rejects the save.
+    func saveEvent(existingIdentifier: String?,
+                   title: String,
+                   venue: String?,
+                   date: Date,
+                   setReminder: Bool) throws -> String {
+        guard isAuthorized else { throw CalendarServiceError.notAuthorized }
 
         let event: EKEvent
-        if let existingID = show.calendarEventID,
-           let existing = store.event(withIdentifier: existingID) {
+        if let existingIdentifier,
+           let existing = store.event(withIdentifier: existingIdentifier) {
             event = existing
         } else {
             event = EKEvent(eventStore: store)
@@ -64,40 +84,45 @@ final class CalendarService {
         }
 
         // Populate event fields.
-        event.title = show.title ?? "Show"
-        event.location = show.venue
-        event.startDate = show.date ?? Date()
-        event.endDate = Calendar.current.date(byAdding: .hour, value: 2, to: event.startDate) ?? event.startDate
+        event.title = title.isEmpty ? "Show" : title
+        event.location = venue
+        event.startDate = date
+        event.endDate = Calendar.current.date(byAdding: .hour, value: 2, to: date) ?? date
 
         event.notes = nil
 
         // Reminder alarm (1 hour before).
         event.alarms?.forEach { event.removeAlarm($0) }
-        if show.setReminder {
+        if setReminder {
             event.addAlarm(EKAlarm(relativeOffset: -3600))
         }
 
-        do {
-            try store.save(event, span: .thisEvent)
-            return event.eventIdentifier
-        } catch {
-            print("⚠️ Failed to save calendar event: \(error)")
-            return nil
+        try store.save(event, span: .thisEvent)
+        guard let identifier = event.eventIdentifier else {
+            throw CalendarServiceError.missingIdentifier
         }
+        return identifier
     }
 
     // MARK: - Delete
 
     /// Deletes the calendar event associated with the given show.
     func deleteEvent(for show: Show) {
-        guard isAuthorized,
-              let eventID = show.calendarEventID,
-              let event = store.event(withIdentifier: eventID) else { return }
+        guard isAuthorized, let eventID = show.calendarEventID else { return }
         do {
-            try store.remove(event, span: .thisEvent)
+            try removeEvent(identifier: eventID)
         } catch {
             print("⚠️ Failed to delete calendar event: \(error)")
         }
+    }
+
+    /// Removes the event with the given identifier. An event that no longer
+    /// exists counts as removed.
+    /// - Throws: If calendar access is missing or EventKit rejects the removal.
+    func removeEvent(identifier: String) throws {
+        guard isAuthorized else { throw CalendarServiceError.notAuthorized }
+        guard let event = store.event(withIdentifier: identifier) else { return }
+        try store.remove(event, span: .thisEvent)
     }
 
     /// Gets the app calendar (creating it if needed) so events share one dot color.
@@ -136,6 +161,22 @@ final class CalendarService {
             return local
         }
         return store.defaultCalendarForNewEvents?.source
+    }
+}
+
+// MARK: - Errors
+
+enum CalendarServiceError: LocalizedError {
+    case notAuthorized
+    case missingIdentifier
+
+    var errorDescription: String? {
+        switch self {
+        case .notAuthorized:
+            return "Calendar access is not enabled."
+        case .missingIdentifier:
+            return "Calendar did not return an event identifier."
+        }
     }
 }
 

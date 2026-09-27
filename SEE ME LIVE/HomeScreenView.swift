@@ -15,6 +15,7 @@ import CoreData
 
 struct HomeScreenView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.scenePhase) private var scenePhase
 
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \Show.date, ascending: true)],
@@ -35,6 +36,8 @@ struct HomeScreenView: View {
 
     @State private var isPresentingEditor = false
     @State private var showToEdit: Show?
+    /// Set by the editor only after a successful local save.
+    @State private var editorSavedMessage: String?
     @State private var toastMessage: String?
     @State private var showToast = false
     @State private var isPresentingDateSizeSheet = false
@@ -141,26 +144,28 @@ struct HomeScreenView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { topToolbar }
             .sheet(isPresented: $isPresentingEditor, onDismiss: {
-                if showToEdit != nil {
-                    showToastBriefly("Show updated")
-                } else if !allShows.isEmpty {
-                    showToastBriefly("Show saved")
+                if let message = editorSavedMessage {
+                    showToastBriefly(message)
                 }
+                editorSavedMessage = nil
                 showToEdit = nil
+                retryAddGigRequest()
             }) {
-                ShowEditorView(showToEdit: showToEdit)
-                    .environment(\.managedObjectContext, viewContext)
+                ShowEditorView(showToEdit: showToEdit) { isNew in
+                    editorSavedMessage = isNew ? "Show saved" : "Show updated"
+                }
+                .environment(\.managedObjectContext, viewContext)
             }
-            .fullScreenCover(isPresented: $isPresentingShareSheet) {
+            .fullScreenCover(isPresented: $isPresentingShareSheet, onDismiss: retryAddGigRequest) {
                 ShareImageEditorView(
                     shows: Array(allShows),
                     performerName: CalendarDisplayOptions.load().performerName
                 )
             }
-            .sheet(isPresented: $isPresentingDateSizeSheet) {
+            .sheet(isPresented: $isPresentingDateSizeSheet, onDismiss: retryAddGigRequest) {
                 DateTextSizeSheet(showDateTextSize: $showDateTextSize)
             }
-            .sheet(isPresented: $isPresentingSettingsFAQ) {
+            .sheet(isPresented: $isPresentingSettingsFAQ, onDismiss: retryAddGigRequest) {
                 SettingsFAQView()
             }
             .task { await performBackgroundSync() }
@@ -171,6 +176,9 @@ struct HomeScreenView: View {
                 for: AppIntentHandoffCenter.addGigRequestedNotification)) { _ in
                 presentAddGigIfRequested()
             }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { presentAddGigIfRequested() }
+            }
             .refreshable {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 await performBackgroundSync()
@@ -179,10 +187,28 @@ struct HomeScreenView: View {
         }
     }
 
+    /// True when nothing else is on screen that the Add Gig editor would
+    /// replace or be blocked by.
+    private var canPresentAddGig: Bool {
+        scenePhase == .active &&
+        !isPresentingEditor &&
+        !isPresentingShareSheet &&
+        !isPresentingDateSizeSheet &&
+        !isPresentingSettingsFAQ
+    }
+
+    /// Presents the editor for a pending Siri "Open Add Gig" request. If the
+    /// app is busy, the request stays pending for the next retry.
     private func presentAddGigIfRequested() {
-        guard AppIntentHandoffCenter.shared.consumeAddGigRequest() else { return }
+        guard AppIntentHandoffCenter.shared.takeAddGigRequest(canPresent: canPresentAddGig) else { return }
         showToEdit = nil
         isPresentingEditor = true
+    }
+
+    /// Retries a pending request after a modal finishes dismissing.
+    private func retryAddGigRequest() {
+        guard AppIntentHandoffCenter.shared.hasPendingAddGigRequest else { return }
+        DispatchQueue.main.async { presentAddGigIfRequested() }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
