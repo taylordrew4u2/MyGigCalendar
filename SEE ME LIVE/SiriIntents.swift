@@ -134,19 +134,23 @@ final class AppIntentHandoffCenter {
     static let shared = AppIntentHandoffCenter()
     static let addGigRequestedNotification = Notification.Name("AppIntentHandoffCenter.addGigRequested")
 
-    private var shouldPresentAddGig = false
+    private var queue = AddGigHandoffQueue()
 
     private init() {}
 
+    var hasPendingAddGigRequest: Bool { queue.isPending }
+
+    /// Records a request to open the Add Gig editor. Repeated requests
+    /// coalesce into one until it is taken.
     func requestAddGig() {
-        shouldPresentAddGig = true
+        queue.request()
         NotificationCenter.default.post(name: Self.addGigRequestedNotification, object: nil)
     }
 
-    func consumeAddGigRequest() -> Bool {
-        guard shouldPresentAddGig else { return false }
-        shouldPresentAddGig = false
-        return true
+    /// Takes the pending request only if the UI can present the editor now;
+    /// otherwise it stays pending so a later retry can present it.
+    func takeAddGigRequest(canPresent: Bool) -> Bool {
+        queue.take(canPresent: canPresent)
     }
 }
 
@@ -199,7 +203,9 @@ private enum GigIntentStore {
         let context = PersistenceController.shared.container.viewContext
         guard let show = try? context.existingObject(with: objectID) as? Show else { return }
 
-        show.calendarEventID = CalendarService.shared.createOrUpdateEvent(for: show)
+        // Keep any existing identifier if EventKit fails.
+        guard let eventID = CalendarService.shared.createOrUpdateEvent(for: show) else { return }
+        show.calendarEventID = eventID
         PersistenceController.shared.save(context: context)
     }
 
