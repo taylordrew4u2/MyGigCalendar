@@ -95,9 +95,8 @@ time.sleep(1.0)
 shot("01-splash")
 time.sleep(3.0)
 shot("02-onboarding")
+# The last page's Continue fires the (pre-granted) calendar request, then enters the app.
 for _ in range(8):
-    if tap("Start using My Gig Calendar", wait=2.0):
-        break
     if not tap("Continue", wait=1.0):
         break
 shot("03-home-empty")
