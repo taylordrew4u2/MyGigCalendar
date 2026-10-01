@@ -12,7 +12,9 @@ struct OnboardingWalkthroughView: View {
 
     @State private var selectedPage = 0
     @State private var isRequestingCalendar = false
-    @State private var calendarStatusText: String?
+    /// Once the calendar explanation has been shown, Skip is gone for good so
+    /// the message can't be dismissed without reaching the system prompt.
+    @State private var hasSeenCalendarPage = false
 
     private let pages = OnboardingPage.pages
 
@@ -30,8 +32,16 @@ struct OnboardingWalkthroughView: View {
                 .tabViewStyle(.page(indexDisplayMode: .always))
 
                 VStack(spacing: 12) {
-                    if selectedPage == pages.count - 1 {
-                        calendarActions
+                    if isLastPage {
+                        // The calendar page always continues straight to the
+                        // system permission prompt (App Review 5.1.1(iv)).
+                        Button {
+                            Task { await continueToCalendarRequest() }
+                        } label: {
+                            primaryButtonLabel("Continue", showsProgress: isRequestingCalendar)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isRequestingCalendar)
                     } else {
                         Button {
                             withAnimation(.easeInOut(duration: 0.22)) {
@@ -41,26 +51,32 @@ struct OnboardingWalkthroughView: View {
                             primaryButtonLabel("Continue")
                         }
                         .buttonStyle(.plain)
-                    }
 
-                    Button {
-                        onComplete()
-                    } label: {
-                        Text(selectedPage == pages.count - 1 ? "Finish" : "Skip")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+                        if !hasSeenCalendarPage {
+                            Button {
+                                onComplete()
+                            } label: {
+                                Text("Skip")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 28)
             }
         }
-        .onAppear {
-            calendarStatusText = CalendarService.shared.isAuthorized ? "Calendar access is already enabled." : nil
+        .onChange(of: selectedPage) {
+            if isLastPage { hasSeenCalendarPage = true }
         }
+    }
+
+    private var isLastPage: Bool {
+        selectedPage == pages.count - 1
     }
 
     private func onboardingPage(_ page: OnboardingPage) -> some View {
@@ -88,75 +104,35 @@ struct OnboardingWalkthroughView: View {
                     .padding(.horizontal, 10)
             }
 
-            if selectedPage == pages.count - 1, let calendarStatusText {
-                Text(calendarStatusText)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .padding(.top, 4)
-            }
-
             Spacer(minLength: 24)
         }
         .padding(.horizontal, 24)
     }
 
-    private var calendarActions: some View {
-        VStack(spacing: 10) {
-            Button {
-                Task { await enableCalendarAccess() }
-            } label: {
-                HStack(spacing: 8) {
-                    if isRequestingCalendar {
-                        ProgressView()
-                    } else {
-                        Image(systemName: CalendarService.shared.isAuthorized ? "checkmark.circle.fill" : "calendar.badge.plus")
-                            .font(.headline)
-                    }
-                    Text(CalendarService.shared.isAuthorized ? "Calendar Enabled" : "Enable Calendar")
-                        .font(.headline)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .foregroundStyle(Color("AppBackground"))
-                .background(Color.primary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    private func primaryButtonLabel(_ title: String, showsProgress: Bool = false) -> some View {
+        HStack(spacing: 8) {
+            if showsProgress {
+                ProgressView()
+                    .tint(.white)
             }
-            .buttonStyle(.plain)
-            .disabled(isRequestingCalendar || CalendarService.shared.isAuthorized)
-
-            Button {
-                onComplete()
-            } label: {
-                primaryButtonLabel("Start using My Gig Calendar")
-            }
-            .buttonStyle(.plain)
+            Text(title)
+                .font(.headline)
         }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func primaryButtonLabel(_ title: String) -> some View {
-        Text(title)
-            .font(.headline)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func enableCalendarAccess() async {
-        guard !CalendarService.shared.isAuthorized else {
-            calendarStatusText = "Calendar access is already enabled."
-            return
-        }
-
+    /// Shows the system calendar prompt, then enters the app whatever the answer.
+    /// If the user already decided, iOS returns immediately without a prompt.
+    private func continueToCalendarRequest() async {
         isRequestingCalendar = true
-        let granted = await CalendarService.shared.requestAccess()
+        if !CalendarService.shared.isAuthorized {
+            _ = await CalendarService.shared.requestAccess()
+        }
         isRequestingCalendar = false
-        calendarStatusText = granted
-            ? "Calendar access is enabled. New gigs can be added to your calendar when you save them."
-            : "Calendar access was not enabled. You can still use the app and add access later in Settings."
+        onComplete()
     }
 }
 
@@ -179,7 +155,7 @@ private struct OnboardingPage {
         OnboardingPage(
             symbol: "arrow.triangle.2.circlepath.icloud",
             title: "Sync with your calendar",
-            message: "Enable calendar access so saved gigs can appear in your device calendar and stay easier to track."
+            message: "My Gig Calendar uses calendar access to add the gigs you save to your device calendar. You can change this anytime in Settings."
         )
     ]
 }
