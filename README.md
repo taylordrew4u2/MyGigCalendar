@@ -17,10 +17,23 @@ My Gig Calendar is a shipping iOS app for comedians, musicians, speakers, and an
 
 **[Download on the App Store](https://apps.apple.com/us/app/my-gig-calendar/id6760590068)**
 
+## Demo
+
 <div align="center">
-  <img src="AppStore/screenshots/en-US/iphone-6.9/01-calendar.png" alt="Calendar home screen" width="260" />
-  &nbsp;&nbsp;
-  <img src="AppStore/screenshots/en-US/iphone-6.9/02-gig-details.png" alt="Gig details screen" width="260" />
+  <img src="screenshots/web-calendar-demo-desktop.gif" alt="Public web calendar demo on desktop: shows grouped by month, opening a flyer, copying the calendar feed link" width="540" />
+  &nbsp;
+  <img src="screenshots/web-calendar-demo-phone.gif" alt="Public web calendar demo on a phone-sized screen" width="240" />
+  <p><sub>The fan-facing web calendar: browse upcoming shows by month, open a show's flyer, and copy the subscribable feed link. Recorded with sample shows in place of a performer's live CloudKit data.</sub></p>
+</div>
+
+**The iOS app** (App Store screenshots: iPhone calendar, gig details, and the iPad layout):
+
+<div align="center">
+  <img src="AppStore/screenshots/en-US/iphone-6.9/01-calendar.png" alt="Calendar home screen on iPhone" height="420" />
+  &nbsp;
+  <img src="AppStore/screenshots/en-US/iphone-6.9/02-gig-details.png" alt="Gig details screen on iPhone" height="420" />
+  &nbsp;
+  <img src="AppStore/screenshots/en-US/ipad-13/01-calendar.png" alt="Calendar home screen on iPad" height="420" />
 </div>
 
 ## Features
@@ -45,7 +58,7 @@ My Gig Calendar is a shipping iOS app for comedians, musicians, speakers, and an
 
 **Public calendar and feed**
 - Every performer gets a shareable link: `https://seemelive.vercel.app/?user=<ID>`
-- Shows grouped by month with role, price, and "Get tickets" links — no account needed to view
+- Shows grouped by month with role, price, flyer, and ticket links — no account needed to view
 - One-tap subscribe for Apple Calendar (`webcal://`) and Google Calendar via an RFC 5545 `.ics` feed
 
 <div align="center">
