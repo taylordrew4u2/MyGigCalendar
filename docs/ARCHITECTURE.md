@@ -55,22 +55,24 @@ The Core Data `Show` entity has 18 attributes:
 
 ## Public CloudKit schema
 
-The public database mirrors a subset of `Show` in a `PublicShow` record type, leaving out local-only fields such as `calendarEventID` and `needsPublicSync`.
+The public database holds a deliberately reduced copy of each show in a `PublicShow` record. `PublicCloudSyncService` writes only four fields and explicitly sets the rest to `nil`, so notes, prices, ticket links, and flyer photos stay in the performer's private store.
 
-| Field | Type |
-|-------|------|
-| `title` | String |
-| `role` | String |
-| `venue` | String |
-| `date` | Date/Time |
-| `price` | Double |
-| `ticketLink` | String |
-| `notes` | String |
-| `userID` | String |
-| `flyer` | Asset |
+| Field | Type | Written by the app |
+|-------|------|--------------------|
+| `title` | String | Yes |
+| `venue` | String | Yes |
+| `date` | Date/Time | Yes |
+| `userID` | String | Yes |
+| `role` | String | No (cleared) |
+| `price` | Double | No (cleared) |
+| `ticketLink` | String | No (cleared) |
+| `notes` | String | No (cleared) |
+| `flyer` | Asset | No (cleared) |
+
+The cleared fields remain in the record type because the web calendar and feed render them when present. Local-only fields such as `calendarEventID` and `needsPublicSync` are never mirrored.
 
 Indexes: `userID` (Queryable), `date` (Queryable, Sortable), `recordName` (Queryable).
 
 ## iCalendar feed
 
-`docs/calendar.ics.js` is a Vercel serverless function (routed from `/calendar.ics` in `vercel.json`). It queries the public database for a `?user=` ID using `CLOUDKIT_API_TOKEN` and returns an RFC 5545 calendar. Each event carries the show title and role, date, venue as location, ticket link, notes, and a stable `UID` derived from the CloudKit record name so updates don't create duplicates.
+`docs/calendar.ics.js` is a Vercel serverless function (routed from `/calendar.ics` in `vercel.json`). It queries the public database for a `?user=` ID using `CLOUDKIT_API_TOKEN` and returns an RFC 5545 calendar. Because the app publishes only title, venue, and date, each event carries the show title as `SUMMARY`, the date as `DTSTART`, the venue as `LOCATION`, and a stable `UID` derived from the CloudKit record name so updates don't create duplicates. The function also emits role (in the summary), notes (`DESCRIPTION`), and ticket link (`URL`) when a record has them, but records written by the current app leave those fields empty.
