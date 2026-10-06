@@ -1,107 +1,127 @@
 <div align="center">
   <img src="screenshots/app-icon-appstore.jpg" alt="My Gig Calendar app icon" width="120" />
   <h1>My Gig Calendar</h1>
-  <p><strong>A native iOS calendar for live performers: add a show once and it reaches your devices, your fans, and your socials.</strong></p>
+  <p><strong>A native iOS calendar for live performers: enter a show once and it reaches your devices, your fans' calendars, and your socials.</strong></p>
 
-  [![App Store](https://img.shields.io/badge/App%20Store-Download-0D96F6?logo=app-store&logoColor=white)](https://apps.apple.com/us/app/my-gig-calendar/id6760590068)
-  ![iOS 17+](https://img.shields.io/badge/iOS-17%2B-black?logo=apple)
-  ![Swift](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)
-  ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0066CC)
-  ![CloudKit](https://img.shields.io/badge/sync-CloudKit-007AFF)
+  [![Swift 5](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)](https://swift.org)
+  [![iOS 17+](https://img.shields.io/badge/iOS-17%2B-000000?logo=apple&logoColor=white)](https://developer.apple.com/ios/)
   [![iOS Build & Test](https://github.com/taylordrew4u2/MyGigCalendar/actions/workflows/ios.yml/badge.svg)](https://github.com/taylordrew4u2/MyGigCalendar/actions/workflows/ios.yml)
+  [![App Store](https://img.shields.io/badge/App%20Store-Download-0D96F6?logo=app-store&logoColor=white)](https://apps.apple.com/us/app/my-gig-calendar/id6760590068)
+
+  <p>
+    <a href="https://apps.apple.com/us/app/my-gig-calendar/id6760590068"><strong>Download on the App Store</strong></a>
+    &nbsp;·&nbsp;
+    <a href="docs/ARCHITECTURE.md">Architecture notes</a>
+  </p>
 </div>
-
----
-
-My Gig Calendar is a shipping iOS app for comedians, musicians, speakers, and anyone with a live show schedule. A performer enters a gig once; it syncs privately across their Apple devices, is published to a public fan-facing web calendar and subscribable `.ics` feed, and can be turned into a ready-to-post promotional flyer — all from one SwiftUI app built entirely on Apple frameworks.
-
-**[Download on the App Store](https://apps.apple.com/us/app/my-gig-calendar/id6760590068)**
-
-## Demo
 
 <div align="center">
-  <img src="screenshots/web-calendar-demo-desktop.gif" alt="Public web calendar demo on desktop: shows grouped by month, opening a flyer, copying the calendar feed link" width="540" />
+  <img src="screenshots/web-calendar-demo-desktop.gif" alt="Public web calendar on desktop: shows grouped by month, opening a flyer, copying the calendar feed link" width="540" />
   &nbsp;
-  <img src="screenshots/web-calendar-demo-phone.gif" alt="Public web calendar demo on a phone-sized screen" width="240" />
-  <p><sub>The fan-facing web calendar: browse upcoming shows by month, open a show's flyer, and copy the subscribable feed link. Recorded with sample shows in place of a performer's live CloudKit data.</sub></p>
+  <img src="screenshots/web-calendar-demo-phone.gif" alt="Public web calendar on a phone-sized screen" width="200" />
+  <p><sub><b>The fan-facing web calendar</b> (not the iOS app): shows grouped by month, a show's flyer, and the subscribable feed link. Recorded with sample shows in place of a performer's live CloudKit data. App screenshots are <a href="#screenshots">below</a>.</sub></p>
 </div>
 
-**The iOS app** (App Store screenshots: iPhone calendar, gig details, and the iPad layout):
+## Why I built it
 
-<div align="center">
-  <img src="AppStore/screenshots/en-US/iphone-6.9/01-calendar.png" alt="Calendar home screen on iPhone" height="420" />
-  &nbsp;
-  <img src="AppStore/screenshots/en-US/iphone-6.9/02-gig-details.png" alt="Gig details screen on iPhone" height="420" />
-  &nbsp;
-  <img src="AppStore/screenshots/en-US/ipad-13/01-calendar.png" alt="Calendar home screen on iPad" height="420" />
-</div>
+Performers keep their schedule in one place and then re-type it everywhere else: a personal calendar, a public "upcoming shows" page, and a promo graphic for each social platform. My Gig Calendar makes the show record the single source of truth. Private data syncs through iCloud, a reduced public copy feeds a web calendar and `.ics` subscription, and the same record drives a flyer generator.
+
+## Highlights
+
+- **Two CloudKit databases, two jobs.** Core Data syncs the full record privately via `NSPersistentCloudKitContainer`; `PublicCloudSyncService` mirrors a deliberately reduced `PublicShow` record (title, venue, date, owner ID) to the public database, so notes, prices, and photos never leave the performer's private store.
+- **Offline-first public sync.** Failed publishes set `needsPublicSync` in Core Data, failed deletes are queued in `UserDefaults`, and both are retried on launch and on return to foreground, so adding a gig backstage with no signal still works.
+- **Idempotent calendar output.** The `EKEvent` identifier is stored on each show so edits update the same iPhone Calendar event; the `.ics` feed uses CloudKit record names as stable `UID`s, so subscribers see updates, not duplicates.
+- **On-device flyer import.** Vision `VNRecognizeTextRequest` plus `NSDataDetector` date parsing and venue heuristics turn a photo of a poster into a prefilled show form.
+- **Native media pipeline.** Flyers render at exact platform sizes (1080×1920, 1080×1080, 1600×900, 1200×628, 1200×630); video backgrounds are composited with `AVMutableVideoComposition`.
+- **Almost no backend.** The web calendar is a static page that reads CloudKit directly with CloudKit JS; the only server code is one Vercel function that emits the RFC 5545 feed. No third-party Swift dependencies.
 
 ## Features
 
-**Show management**
-- Calendar-first home screen with a month view, upcoming and past lists, and search across title, venue, role, and notes
-- Shows carry venue, date, time, price, ticket link, performer role, notes, and a flyer photo
-- **Flyer import:** photograph a show poster and the app reads the title, venue, and date to prefill the form (on-device OCR)
-- **Siri & Shortcuts:** "Add a gig", "Open add gig", and "Show my gigs" via App Intents
+| Area | What it does |
+|------|--------------|
+| **Show management** | Month calendar home screen, upcoming and past lists, search across title, venue, role, and notes. Shows carry venue, date, time, price, ticket link, role, notes, and a flyer photo. |
+| **Flyer import** | Photograph a poster; on-device OCR prefills title, venue, and date. |
+| **Siri & Shortcuts** | "Add a gig", "Open add gig", and "Show my gigs" via App Intents and an `AppShortcutsProvider`. |
+| **Sync** | Private iCloud sync across iPhone and iPad; public CloudKit mirror with a retry queue. |
+| **iPhone Calendar** | Optional event per show in a dedicated calendar, with an optional one-hour reminder. |
+| **Flyer studio** | Six presets (IG Story, IG Post, TikTok, X/Twitter, Facebook, Link Preview); gradient, dark, light, or custom backgrounds (color, gradient, photo, video); draggable, rotatable text with font, weight, color, shadow, and outline. |
+| **Purchases** | StoreKit 2 in-app purchase to remove the watermark. |
+| **Web calendar** | Static page at `/?user=<ID>`: a performer's upcoming shows grouped by month; no account needed to view. |
+| **Calendar feed** | `/calendar.ics?user=<ID>` with one-tap subscribe for Apple Calendar (`webcal://`) and Google Calendar. |
 
-**Sync and calendars**
-- Private iCloud sync across devices with `NSPersistentCloudKitContainer`
-- Public CloudKit mirror that powers a fan-facing web calendar
-- Optional iPhone Calendar event per show, with an optional one-hour reminder
-- Offline-resilient: failed public syncs and deletes are queued and retried
+## Screenshots
 
-**Flyer studio**
-- Six social size presets: IG Story and TikTok (9:16), IG Post (1:1), X/Twitter (16:9), Facebook and Link Preview (1.91:1)
-- Gradient, dark, light, or custom backgrounds (solid color, gradient, photo, or video)
-- Draggable text overlays with rotation, font, weight, size, color, shadow, and outline
-- Export to the photo library; watermark removal is an in-app purchase
+<table>
+  <tr>
+    <td align="center"><img src="AppStore/screenshots/en-US/iphone-6.9/01-calendar.png" alt="Calendar home screen on iPhone" width="200" /></td>
+    <td align="center"><img src="AppStore/screenshots/en-US/iphone-6.9/02-gig-details.png" alt="Gig details screen on iPhone" width="200" /></td>
+    <td align="center"><img src="screenshots/web-calendar-demo.png" alt="Public web calendar on a phone" width="200" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>iPhone: calendar home</sub></td>
+    <td align="center"><sub>iPhone: gig details</sub></td>
+    <td align="center"><sub>Web calendar on a phone</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="AppStore/screenshots/en-US/ipad-13/01-calendar.png" alt="Calendar home screen on iPad" width="260" /></td>
+    <td align="center"><img src="AppStore/screenshots/en-US/ipad-13/02-gig-details.png" alt="Gig details screen on iPad" width="260" /></td>
+    <td align="center"><img src="screenshots/web-calendar-desktop.png" alt="Public web calendar on desktop" width="260" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>iPad: calendar home</sub></td>
+    <td align="center"><sub>iPad: gig details</sub></td>
+    <td align="center"><sub>Web calendar on desktop</sub></td>
+  </tr>
+</table>
 
-**Public calendar and feed**
-- Every performer gets a shareable link: `https://seemelive.vercel.app/?user=<ID>`
-- Shows grouped by month with role, price, flyer, and ticket links — no account needed to view
-- One-tap subscribe for Apple Calendar (`webcal://`) and Google Calendar via an RFC 5545 `.ics` feed
+## Architecture
 
-<div align="center">
-  <img src="screenshots/web-calendar-demo.png" alt="Public web calendar on mobile" width="240" />
-  &nbsp;&nbsp;
-  <img src="screenshots/web-calendar-desktop.png" alt="Public web calendar on desktop" width="520" />
-</div>
+```mermaid
+flowchart LR
+    subgraph iOS["iOS app (SwiftUI)"]
+        UI[Views & App Intents] --> CD[(Core Data)]
+        UI --> OCR[Vision OCR]
+        UI --> FLY[Flyer renderer]
+        CD --> PCS[PublicCloudSyncService]
+        CD --> CAL[CalendarService]
+    end
+    CD <-->|NSPersistentCloudKitContainer| PRIV[(CloudKit private DB)]
+    PCS -->|PublicShow records| PUB[(CloudKit public DB)]
+    CAL --> EK[iPhone Calendar / EventKit]
+    PUB -->|CloudKit JS| WEB["Web calendar<br/>docs/index.html"]
+    PUB -->|performQuery| ICS["Vercel function<br/>/calendar.ics"]
+    ICS --> SUB[Apple / Google Calendar subscribers]
+    FLY --> PH[Photos & share sheet]
+```
 
-## Tech Stack
+**Design decisions**
+
+- **Separate public record type instead of sharing the private zone.** The app writes only title, venue, date, and `userID` to `PublicShow` and explicitly clears the rest, so nothing added to the private model later becomes public by accident.
+- **Anonymous UUID as identity.** A UUID created on first launch keys the performer's public records and URLs. No sign-up flow, and nothing personal in the link.
+- **Persisted retry state, not an in-memory queue.** Unsynced shows are flagged in Core Data and pending deletes are stored in `UserDefaults`, so outstanding public work survives app termination and resumes on the next launch or foreground.
+- **Static web page plus one function.** The calendar page talks to CloudKit from the browser; only the `.ics` feed needs a server, because calendar clients can't run JavaScript. The response is cached for an hour (`Cache-Control: max-age=3600`).
+- **Apple frameworks only.** Vision, EventKit, AVFoundation, StoreKit 2, and App Intents cover every feature without a dependency manager.
+
+Service-by-service notes, the 18-attribute Core Data model, and the public CloudKit schema are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Tech stack
 
 | Layer | Technology |
 |-------|-----------|
-| App | Swift 5, SwiftUI, iOS 17+ |
-| Persistence & private sync | Core Data + `NSPersistentCloudKitContainer` |
+| App | Swift 5, SwiftUI, iOS 17+ (iPhone and iPad) |
+| Persistence & private sync | Core Data, `NSPersistentCloudKitContainer` |
 | Public data | CloudKit public database |
-| System integration | EventKit, App Intents (Siri), PhotosUI, AVFoundation |
-| Text recognition | Vision (`VNRecognizeTextRequest`) + `NSDataDetector` |
-| Rendering | UIKit `UIGraphicsImageRenderer`, `AVMutableVideoComposition` |
+| System integration | EventKit, App Intents, PhotosUI |
+| Text recognition | Vision, `NSDataDetector` |
+| Rendering | `UIGraphicsImageRenderer`, AVFoundation |
 | Purchases | StoreKit 2 |
-| Web calendar | Static HTML/CSS/JS + CloudKit JS |
+| Web calendar | Static HTML/CSS/JS, CloudKit JS |
 | Calendar feed | Node.js serverless function on Vercel |
-| CI | GitHub Actions (`xcodebuild test` on macOS) |
+| CI | GitHub Actions on `macos-15` |
 
-No third-party Swift dependencies.
+## Getting started
 
-## Engineering Highlights
-
-- **Two-database CloudKit design.** Private data syncs automatically through `NSPersistentCloudKitContainer`, while a separate service mirrors a deliberately reduced `PublicShow` record to the public database, so fans see only what's meant to be public.
-- **Offline-first public sync.** Each show tracks `needsPublicSync` / `pendingPublicDelete` flags in Core Data; anything that fails to publish is retried on the next launch or foreground, so a performer can add gigs with no signal backstage.
-- **Idempotent calendar integration.** The EventKit event ID is stored on each show, so edits update the same iPhone Calendar event; the `.ics` feed uses CloudKit record names as stable `UID`s for the same reason.
-- **Stable public identity without accounts.** A UUID generated on first launch becomes the performer's public URL key — no sign-up flow.
-- **Native media pipeline.** Flyers are rendered with Core Graphics at exact platform dimensions (e.g. 1080×1920, 1200×628); video backgrounds are composited with AVFoundation.
-- **On-device flyer OCR.** Vision text recognition plus date detection and venue heuristics turn a poster photo into a prefilled show.
-- **Zero-backend web layer.** The public calendar is a static page reading CloudKit directly; the only server code is a single serverless function for the `.ics` feed.
-
-Deeper notes on each service, the Core Data model, and the CloudKit schema are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
-## Getting Started
-
-**Prerequisites**
-- macOS with Xcode 16 or later (the project uses the Xcode 16 project format)
-- An Apple Developer account for the iCloud/CloudKit capabilities
-- Node.js and the Vercel CLI, only if you want to run the web calendar and feed locally
+Requirements: Xcode 16 or later (project format 77), and an Apple Developer account for the iCloud capability.
 
 ```bash
 git clone https://github.com/taylordrew4u2/MyGigCalendar.git
@@ -109,23 +129,14 @@ cd MyGigCalendar
 open "SEE ME LIVE.xcodeproj"
 ```
 
-Select the **SEE ME LIVE** scheme, choose a simulator or device, and press **Cmd+R**. CloudKit features need a signed-in iCloud account; the app checks availability at launch and disables sync when it's missing.
+Select the **SEE ME LIVE** scheme, pick a simulator or device, and press **Cmd+R**. CloudKit features need a signed-in iCloud account; the app checks availability at launch and turns sync off without one.
 
-**CloudKit:** create the `iCloud.comedy.SEE-ME-LIVE` container and the `PublicShow` record type — full walkthrough in [`CLOUDKIT_SETUP.md`](CLOUDKIT_SETUP.md).
-
-**Web calendar and feed:** set `CLOUDKIT_API_TOKEN`, then run locally with:
-
-```bash
-npx vercel dev
-# Web calendar: http://localhost:3000/?user=<USER_ID>
-# iCal feed:    http://localhost:3000/calendar.ics?user=<USER_ID>
-```
-
-Deployment details are in [`CALENDAR_FEED_SETUP.md`](CALENDAR_FEED_SETUP.md).
+- **CloudKit:** create the `iCloud.comedy.SEE-ME-LIVE` container and the `PublicShow` record type. Walkthrough: [`CLOUDKIT_SETUP.md`](CLOUDKIT_SETUP.md).
+- **Web calendar and feed:** `vercel.json` publishes `docs/` and routes `/calendar.ics` to the function. Run locally with `npx vercel dev`, then open `/?user=<USER_ID>` or `/calendar.ics?user=<USER_ID>`. Details: [`CALENDAR_FEED_SETUP.md`](CALENDAR_FEED_SETUP.md).
 
 ## Testing
 
-100 XCTest cases across 9 test files cover persistence, the show editor's save logic, flyer rendering, HTML export, OCR parsing, user identity, and StoreKit purchases (using a local `.storekit` configuration).
+100 XCTest cases in 9 files cover persistence, the show editor's save logic, flyer rendering, HTML export, OCR parsing, user identity, and StoreKit purchases (against a local `.storekit` configuration).
 
 ```bash
 xcodebuild test \
@@ -134,22 +145,20 @@ xcodebuild test \
   -destination "platform=iOS Simulator,name=iPhone 16,OS=latest"
 ```
 
-Or press **Cmd+U** in Xcode. CI runs the same command on every push and pull request to `main`, skipping the one purchase test that needs a UI window scene to present the StoreKit sheet.
+CI runs this on every push and pull request to `main`, skipping the one purchase test that needs a window scene to present the StoreKit sheet. A second, manually triggered workflow boots a Simulator and drives the main flows with `idb` ([`Tools/simulator-run/drive.py`](Tools/simulator-run/drive.py)), saving screenshots.
 
-## Project Structure
+## Project structure
 
 ```
-MyGigCalendar/
-├── SEE ME LIVE/             # iOS app: SwiftUI views, services, Core Data model, Siri intents
-├── SEE ME LIVETests/        # XCTest suite and StoreKit test configuration
-├── docs/                    # Public web calendar (index.html) and .ics serverless function
-├── AppStore/                # App Store icon and screenshot assets
-├── Tools/simulator-run/     # Script that drives the app in the Simulator for screenshots
-├── .github/workflows/       # CI build/test and on-demand Simulator run
-├── screenshots/             # README images
-└── vercel.json              # Routes /calendar.ics to the serverless function
+SEE ME LIVE/            SwiftUI views, services, Core Data model, App Intents
+SEE ME LIVETests/       XCTest suite and StoreKit test configuration
+docs/                   Web calendar (index.html), .ics function, ARCHITECTURE.md
+AppStore/               App Store icons and screenshots
+Tools/simulator-run/    Simulator automation script
+.github/workflows/      CI build/test and on-demand Simulator run
+screenshots/            README media
 ```
 
-## Author
+---
 
-Built by **Taylor Drew** — [App Store](https://apps.apple.com/us/app/my-gig-calendar/id6760590068) · [GitHub](https://github.com/taylordrew4u2)
+<p align="center">Built by Taylor Drew · <a href="https://github.com/taylordrew4u2">github.com/taylordrew4u2</a></p>
