@@ -246,6 +246,12 @@ struct HomeScreenView: View {
                 }
                 .disabled(allShows.isEmpty)
 
+                if let publicCalendarURL {
+                    ShareLink(item: publicCalendarURL) {
+                        Label("Share calendar link", systemImage: "link")
+                    }
+                }
+
                 Button {
                     isPresentingDateSizeSheet = true
                 } label: {
@@ -258,6 +264,17 @@ struct HomeScreenView: View {
             }
             .accessibilityLabel("More")
         }
+    }
+
+    private var publicCalendarURL: URL? {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "seemelive.vercel.app"
+        components.path = "/"
+        components.queryItems = [
+            URLQueryItem(name: "user", value: UserIdentityService.shared.userID)
+        ]
+        return components.url
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1007,6 +1024,10 @@ private struct SettingsFAQView: View {
                     faqItem(
                         "Do shows sync to my calendar?",
                         "When calendar access is enabled, saved gigs can be added to your device calendar."
+                    )
+                    faqItem(
+                        "How do I share my calendar?",
+                        "Tap More (…) on the home screen, then Share calendar link. Copy or send the link to your public calendar. It shows the titles, venues, and dates of gigs that have synced to iCloud."
                     )
                 }
                 .padding(20)
